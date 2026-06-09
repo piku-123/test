@@ -1,0 +1,93 @@
+const fs = require("fs-extra");
+const path = require("path");
+const axios = require("axios");
+
+// Music Download Function
+async function downloadMusic(videoID, filePath) {
+  // নতুন API URL
+  const apiUrl = `https://api.nexray.eu.cc/downloader/savetube?url=https://www.youtube.com/watch?v=${videoID}&quality=mp3`;
+
+  // ১. প্রথমে API থেকে ডাটা ফেচ করে অডিওর ডিরেক্ট ডাউনলোড লিংক বের করা
+  const apiResponse = await axios.get(apiUrl);
+
+  if (!apiResponse.data || !apiResponse.data.status || !apiResponse.data.result.url) {
+    throw new Error("Failed to get download link from the new API.");
+  }
+
+  const directDownloadUrl = apiResponse.data.result.url;
+
+  // ২. প্রাপ্ত ডিরেক্ট লিংক থেকে অডিও ফাইলটি স্ট্রিম হিসেবে ডাউনলোড করা
+  const response = await axios({
+    method: "get",
+    url: directDownloadUrl,
+    responseType: "stream"
+  });
+
+  const writer = fs.createWriteStream(filePath);
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on("finish", resolve);
+    writer.on("error", reject);
+  });
+}
+
+module.exports.config = {
+  name: "play",
+  aliases: ["p", "song"],
+  version: "3.1.0",
+  permission: 0,
+  prefix: false,
+  author: "Adi.0X",
+  description: "Instant YT Music Play",
+  category: "Media",
+  usages: "[song name]",
+  cooldowns: 2
+};
+
+module.exports.run = async function ({ api, event, args }) {
+  const { threadID, messageID } = event;
+  const query = args.join(" ").trim();
+  if (!query) return api.sendMessage("Please provide a song name.", threadID, messageID);
+
+  const cacheDir = path.join(__dirname, "cache");
+  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+
+  const filePath = path.join(cacheDir, `audio_${Date.now()}.mp3`);
+
+  try {
+    // ১. সার্চ শুরু
+    api.setMessageReaction("🔍", messageID, threadID, () => {}, true);
+
+    const searchRes = await axios.get(`https://zeroex-all-rest-api.onrender.com/api/ytmusic/search?q=${encodeURIComponent(query)}&limit=1`);
+    const results = searchRes.data.results;
+
+    if (!results || results.length === 0) {
+      api.setMessageReaction("❌", messageID, threadID, () => {}, true);
+      return api.sendMessage("❌ No songs found.", threadID, messageID);
+    }
+
+    const selected = results[0]; // প্রথম রেজাল্ট
+
+    // ২. ডাউনলোড শুরু
+    api.setMessageReaction("💭", messageID, threadID, () => {}, true);
+    await downloadMusic(selected.videoId, filePath);
+
+    // ৩. আপলোড শুরু
+    api.setMessageReaction("⏩", messageID, threadID, () => {}, true);
+
+    await api.sendMessage({
+      body: `🎵 Title: ${selected.title}\n👤 Artist: ${selected.artist || "Unknown"}\n💿 Album: ${selected.album || "Single"}`,
+      attachment: fs.createReadStream(filePath)
+    }, threadID, (err) => {
+      // ৪. কাজ শেষ হলে হেডফোন রিঅ্যাক্ট
+      api.setMessageReaction("🎧", messageID, threadID, () => {}, true);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }, messageID);
+
+  } catch (e) {
+    api.sendMessage(`❌ Error: ${e.message}`, threadID, messageID);
+    api.setMessageReaction("❌", messageID, threadID, () => {}, true);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+};

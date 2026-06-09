@@ -1,0 +1,56 @@
+# Zeroex Bot Language File - Cleaned Version
+# Language: English (en)
+
+# Zeroex.js - Core Bot Messages
+zeroex.errorFormat=Malformed module format!
+zeroex.nameExist=Command/Module name already exists!
+zeroex.notFoundLanguage=Module %1 does not support your language.
+zeroex.notFoundPackage=Can't find package %1 for module %2, installing...
+zeroex.cantInstallPackage=Can't install package %1 for module %2. Error: %3
+zeroex.loadedPackage=Successfully installed all packages for module %1.
+zeroex.successLoadModule=Successfully loaded module %1.
+zeroex.failLoadModule=Failed to load module %1. Error: %2
+zeroex.finishLoadModule=Loaded %1 commands and %2 events.
+zeroex.foundPathAppstate=Found appstate.json, logging in...
+zeroex.notFoundPathAppstate=Error: appstate.json not found or malformed!
+zeroex.handleListenError=Listen handler error: %1
+zeroex.successConnectDatabase=Connected to MongoDB successfully!
+zeroex.failConnectDatabase=Failed to connect to database. Error: %1
+
+# includes/listen.js
+listen.startLoadEnvironment=Loading environment variables...
+listen.loadedEnvironmentUser=User environment loaded successfully.
+listen.successLoadEnvironment=All environment variables loaded!
+listen.failLoadEnvironment=Environment load failed. Error: %1
+
+# includes/controller/currencies.js, threads.js, users.js
+currencies.needObjectOrArray=Must be an Array or an Object.
+currencies.needNumber=Money value must be a number.
+threads.needObject=Thread data must be an Object.
+users.needObject=User data must be an Object.
+
+# includes/handle/handleCommand.js
+handleCommand.userBanned=⛔️ [ ACCESS DENIED ]\nYou are currently banned from using the bot.\nReason: %1\nDate: %2\nContact Admin for unban.
+handleCommand.threadBanned=⛔️ [ GROUP BANNED ]\nThis group has been banned from using the bot.\nReason: %1\nDate: %2\nContact Admin for unban.
+handleCommand.commandNotExist=Command not found. Did you mean "%1"?
+handleCommand.permssionNotEnough=⚠️ [ PERMISSION DENIED ]\nYou don't have permission to use the "%1" command.
+handleCommand.commandError=Unexpected error in command %1: %2
+
+# includes/handle/handleCommandEvent.js
+handleCommandEvent.moduleError=Event handler error in module %1: %2
+
+# includes/handle/handleCreateDatabase.js
+handleCreateDatabase.newThread=[ DATABASE ] New group registered: %1
+handleCreateDatabase.newUser=[ DATABASE ] New user registered: %1
+
+# includes/handle/handleEvent.js
+handleEvent.eventError=Error in event %1: %2
+
+# includes/handle/handleReaction.js & handleReply.js
+handleReaction.missingValue=Required value for reaction missing.
+handleReaction.executeError=Failed to process reaction. Error: %1
+handleReply.missingValue=Required value for reply missing.
+handleReply.executeError=Failed to process reply. Error: %1
+
+# utils/index.js
+utils.throwError=❌ [ INVALID SYNTAX ]\nUsage: %1help %2 to see how to use this command.

@@ -1,0 +1,52 @@
+{
+    "ADMIN_PASSWORD": "Adi",
+    "language": "en",
+    "BOTNAME": "Zeroex Bot",
+    "PREFIX": "o",
+    "ADMIN": "Adi.0X",
+    "ADMINFB": "https://www.facebook.com/Adi.0X",
+    "ADMINBOT": [
+        "61553834090250",
+        "100048258944357",
+        "61583470431313",
+        "100024144770127"
+    ],
+    "mod": [
+        "100048258944357",
+        "100023220639817"
+    ],
+    "UNSEND_LOG_GROUP": "9588685674583960",
+    "BOT_NOTIFY_GROUP": "1561542378741538",
+    "DeveloperMode": false,
+    "autoCreateDB": true,
+    "NOTIFICATION": true,
+    "notiGroup": true,
+    "allowInbox": true,
+    "autoClean": true,
+    "commandDisabled": [
+        "autoreact.js"
+    ],
+    "eventDisabled": [],
+    "DATABASE": {
+        "MONGODB_URI": ""
+    },
+    "APPSTATEPATH": "appstate.json",
+    "FCAOption": {
+        "forceLogin": true,
+        "listenEvents": true,
+        "pauseLog": true,
+        "logLevel": "error",
+        "selfListen": true,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+    },
+    "menu": {
+        "autoUnsend": true,
+        "delayUnsend": 60
+    },
+    "help": {
+        "autoUnsend": true,
+        "delayUnsend": 120
+    },
+    "version": "1.2.14",
+    "systemMode": "gcadmin"
+}

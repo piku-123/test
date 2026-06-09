@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zeroex · Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root {
+  --bg0:#080a0f;
+  --bg1:#0c0f16;
+  --bg2:#111520;
+  --bg3:#161c2a;
+  --bd:#1e2535;
+  --bd2:#28304a;
+  --acc:#4f8ef7;
+  --acc2:#7bb3ff;
+  --acc-g:rgba(79,142,247,.15);
+  --grn:#34d399;
+  --grn-g:rgba(52,211,153,.12);
+  --red:#f87171;
+  --red-g:rgba(248,113,113,.12);
+  --ylw:#fbbf24;
+  --ylw-g:rgba(251,191,36,.1);
+  --t0:#f1f5f9;
+  --t1:#94a3b8;
+  --t2:#4b5563;
+  --t3:#2d3748;
+  --mono:'Geist Mono',monospace;
+  --sans:'Outfit',sans-serif;
+  --r:10px;
+  --sb:220px;
+  --top:52px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--bg0);color:var(--t0);font-family:var(--sans);overflow:hidden;}
+
+/* ── NOISE ── */
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:.5;}
+
+/* ══ LOGIN ══ */
+#loginWrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:200;background:var(--bg0);}
+.login-card{width:340px;background:var(--bg1);border:1px solid var(--bd2);border-radius:16px;padding:40px 36px;position:relative;overflow:hidden;}
+.login-card::before{content:'';position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:240px;height:160px;background:radial-gradient(ellipse,rgba(79,142,247,.2),transparent 70%);pointer-events:none;}
+.lc-icon{width:52px;height:52px;background:linear-gradient(135deg,#1e3a8a,var(--acc));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 16px;box-shadow:0 0 28px rgba(79,142,247,.35);}
+.lc-title{text-align:center;font-size:20px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px;}
+.lc-sub{text-align:center;font-size:11px;color:var(--t2);font-family:var(--mono);letter-spacing:1px;margin-bottom:28px;}
+.lc-label{display:block;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--t2);font-family:var(--mono);margin-bottom:6px;}
+.lc-input{width:100%;background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;padding:11px 14px;color:var(--t0);font-family:var(--mono);font-size:13px;outline:none;transition:border-color .2s,box-shadow .2s;margin-bottom:14px;}
+.lc-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-g);}
+.lc-btn{width:100%;background:linear-gradient(135deg,#1e3a8a,var(--acc));color:#fff;border:none;border-radius:8px;padding:12px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s,transform .1s;letter-spacing:.2px;}
+.lc-btn:hover{opacity:.9;}
+.lc-btn:active{transform:scale(.98);}
+.lc-err{color:var(--red);font-size:11px;font-family:var(--mono);text-align:center;margin-top:10px;display:none;}
+
+/* ══ APP SHELL ══ */
+#app{display:none;height:100vh;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+#sb{position:fixed;left:0;top:0;bottom:0;width:var(--sb);background:var(--bg1);border-right:1px solid var(--bd);display:flex;flex-direction:column;z-index:100;transition:transform .25s;}
+.sb-brand{padding:16px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;}
+.sb-logo{width:32px;height:32px;background:linear-gradient(135deg,#1e3a8a,var(--acc));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.sb-name{font-size:15px;font-weight:700;letter-spacing:-.3px;}
+.sb-tag{font-size:9px;color:var(--t2);font-family:var(--mono);letter-spacing:.5px;margin-top:1px;}
+
+.sb-nav{flex:1;overflow-y:auto;padding:10px 10px;scrollbar-width:none;}
+.sb-nav::-webkit-scrollbar{display:none;}
+.sb-sec{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);font-family:var(--mono);padding:10px 8px 4px;}
+.nav-btn{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;cursor:pointer;color:var(--t1);font-size:13px;font-weight:500;transition:all .15s;border:none;background:none;width:100%;text-align:left;position:relative;}
+.nav-btn i{width:15px;font-size:12px;text-align:center;opacity:.7;}
+.nav-btn:hover{background:var(--bg2);color:var(--t0);}
+.nav-btn.active{background:rgba(79,142,247,.12);color:var(--acc2);}
+.nav-btn.active i{opacity:1;}
+.nav-btn.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:60%;background:var(--acc);border-radius:0 2px 2px 0;}
+
+.sb-foot{padding:12px 14px;border-top:1px solid var(--bd);}
+.status-pill{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;padding:9px 11px;}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0;}
+.sdot.on{background:var(--grn);box-shadow:0 0 6px var(--grn);animation:blink 2s infinite;}
+.sdot.off{background:var(--red);}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.4;}}
+.sp-name{font-size:12px;font-weight:600;color:var(--t0);}
+.sp-up{font-size:10px;color:var(--t2);font-family:var(--mono);margin-top:1px;}
+
+/* ── TOPBAR ── */
+#topbar{position:fixed;left:var(--sb);right:0;top:0;height:var(--top);background:var(--bg1);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;padding:0 24px;z-index:50;}
+.tb-title{font-size:14px;font-weight:600;color:var(--t0);}
+.tb-right{display:flex;gap:8px;align-items:center;}
+.tb-clock{font-family:var(--mono);font-size:11px;color:var(--t2);background:var(--bg2);padding:5px 10px;border-radius:6px;border:1px solid var(--bd);}
+.tb-btn{background:var(--bg2);border:1px solid var(--bd2);border-radius:7px;color:var(--t1);padding:6px 10px;cursor:pointer;font-size:12px;transition:all .15s;}
+.tb-btn:hover{border-color:var(--acc);color:var(--acc);}
+#menuToggle{display:none;background:var(--bg2);border:1px solid var(--bd2);border-radius:7px;color:var(--t1);padding:6px 10px;cursor:pointer;font-size:13px;}
+
+/* ── MAIN ── */
+#main{position:fixed;left:var(--sb);right:0;top:var(--top);bottom:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bd2) transparent;}
+#main::-webkit-scrollbar{width:5px;}
+#main::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px;}
+.page{display:none;padding:22px 24px;}
+.page.act{display:block;}
+
+/* ── CARDS ── */
+.card{background:var(--bg1);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;}
+.ch{padding:14px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;background:var(--bg2);}
+.ch-t{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;}
+.ch-t i{color:var(--acc);font-size:11px;}
+.cb{padding:18px;}
+
+/* ── GRID ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+.gap{margin-bottom:16px;}
+
+/* ── STAT CARDS ── */
+.stat{background:var(--bg1);border:1px solid var(--bd);border-radius:var(--r);padding:18px 20px;position:relative;overflow:hidden;}
+.stat::after{content:'';position:absolute;bottom:-20px;right:-20px;width:80px;height:80px;border-radius:50%;opacity:.07;}
+.stat.b::after{background:var(--acc);}
+.stat.g::after{background:var(--grn);}
+.stat.r::after{background:var(--red);}
+.stat.y::after{background:var(--ylw);}
+.stat-ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;margin-bottom:12px;}
+.stat-ico.b{background:rgba(79,142,247,.12);color:var(--acc2);}
+.stat-ico.g{background:var(--grn-g);color:var(--grn);}
+.stat-ico.r{background:var(--red-g);color:var(--red);}
+.stat-ico.y{background:var(--ylw-g);color:var(--ylw);}
+.stat-v{font-size:26px;font-weight:800;letter-spacing:-1px;line-height:1;margin-bottom:5px;}
+.stat-l{font-size:10px;font-family:var(--mono);color:var(--t2);letter-spacing:.5px;}
+
+/* ── LOG ── */
+.logbox{background:var(--bg0);border:1px solid var(--bd);border-radius:8px;overflow-y:auto;padding:12px 14px;font-family:var(--mono);font-size:11px;line-height:1.9;scrollbar-width:thin;scrollbar-color:var(--bd2) transparent;}
+.logbox::-webkit-scrollbar{width:3px;}
+.logbox::-webkit-scrollbar-thumb{background:var(--bd2);}
+.ll{color:var(--t1);}
+.ll.er{color:var(--red);}
+.ll.wn{color:var(--ylw);}
+.ll.ok{color:var(--grn);}
+.lt{color:var(--t3);margin-right:8px;}
+
+/* ── TABLE ── */
+.twrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t2);padding:9px 14px;border-bottom:1px solid var(--bd);background:var(--bg2);}
+td{padding:11px 14px;border-bottom:1px solid var(--bd);color:var(--t1);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.015);}
+
+/* ── POWER BTNS ── */
+.pg{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.pb{display:flex;align-items:center;gap:9px;background:var(--bg2);border:1px solid var(--bd2);border-radius:9px;padding:13px 16px;cursor:pointer;color:var(--t0);font-family:var(--sans);font-size:13px;font-weight:500;transition:all .2s;width:100%;border:1px solid var(--bd2);}
+.pb.g:hover{background:var(--grn-g);border-color:var(--grn);color:var(--grn);}
+.pb.r:hover{background:var(--red-g);border-color:var(--red);color:var(--red);}
+.pb.b:hover{background:var(--acc-g);border-color:var(--acc);color:var(--acc2);}
+.pb.y:hover{background:var(--ylw-g);border-color:var(--ylw);color:var(--ylw);}
+
+/* ── FORM ── */
+.fg{margin-bottom:16px;}
+.fl{display:block;font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--t2);font-family:var(--mono);margin-bottom:6px;}
+.fi,.fsel{width:100%;background:var(--bg2);border:1px solid var(--bd2);border-radius:7px;padding:10px 13px;color:var(--t0);font-family:var(--mono);font-size:12px;outline:none;transition:border-color .2s;}
+.fi:focus,.fsel:focus{border-color:var(--acc);}
+.fsel option{background:var(--bg2);}
+.fh{font-size:10px;color:var(--t2);font-family:var(--mono);margin-top:4px;}
+textarea.fi{resize:vertical;min-height:110px;line-height:1.7;}
+
+/* ── TOGGLE ── */
+.tog{display:inline-flex;background:var(--bg2);border:1px solid var(--bd2);border-radius:7px;overflow:hidden;}
+.to{padding:7px 14px;font-size:11px;font-family:var(--mono);cursor:pointer;color:var(--t2);border:none;background:none;transition:all .15s;}
+.to.on{background:var(--acc);color:#fff;}
+
+/* ── TAG INPUT ── */
+.tag-wrap{display:flex;flex-wrap:wrap;gap:5px;background:var(--bg2);border:1px solid var(--bd2);border-radius:7px;padding:7px 9px;min-height:40px;align-items:center;cursor:text;}
+.tag-wrap:focus-within{border-color:var(--acc);}
+.tag{background:rgba(79,142,247,.12);color:var(--acc2);border:1px solid rgba(79,142,247,.25);border-radius:4px;padding:2px 7px;font-size:11px;font-family:var(--mono);display:flex;align-items:center;gap:4px;}
+.tag-x{cursor:pointer;opacity:.6;font-size:10px;background:none;border:none;color:inherit;padding:0;}
+.tag-x:hover{opacity:1;}
+.tag-in{background:none;border:none;outline:none;color:var(--t0);font-family:var(--mono);font-size:12px;min-width:80px;flex:1;}
+
+/* ── BADGE ── */
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-family:var(--mono);font-weight:600;}
+.badge.g{background:var(--grn-g);color:var(--grn);}
+.badge.r{background:var(--red-g);color:var(--red);}
+.badge.b{background:var(--acc-g);color:var(--acc2);}
+.badge.y{background:var(--ylw-g);color:var(--ylw);}
+
+/* ── PROGRESS ── */
+.prw{margin-bottom:14px;}
+.prh{display:flex;justify-content:space-between;margin-bottom:5px;}
+.prl{font-size:11px;color:var(--t1);font-family:var(--mono);}
+.prv{font-size:11px;color:var(--t2);font-family:var(--mono);}
+.prb{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;}
+.prf{height:100%;border-radius:3px;transition:width 1s ease;}
+.prf.b{background:linear-gradient(90deg,#1e3a8a,var(--acc2));}
+.prf.g{background:linear-gradient(90deg,#065f46,var(--grn));}
+.prf.y{background:linear-gradient(90deg,#78350f,var(--ylw));}
+
+/* ── APPSTATE TABS ── */
+.astabs{display:flex;background:var(--bg2);border:1px solid var(--bd);border-radius:9px;overflow:hidden;width:fit-content;margin-bottom:18px;}
+.astab{padding:10px 20px;font-size:13px;font-weight:500;border:none;background:none;cursor:pointer;color:var(--t2);transition:all .15s;font-family:var(--sans);}
+.astab:hover{color:var(--t0);}
+.astab.act{background:var(--acc);color:#fff;}
+
+/* ── DROP ZONE ── */
+.dz{border:2px dashed var(--bd2);border-radius:9px;padding:26px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:14px;}
+.dz:hover{border-color:var(--acc);background:var(--acc-g);}
+.dz i{font-size:26px;color:var(--acc);margin-bottom:8px;display:block;}
+.dz p{font-size:12px;color:var(--t1);margin-bottom:3px;}
+.dz small{font-size:10px;color:var(--t2);font-family:var(--mono);}
+
+/* ── BUTTONS ── */
+.btn{background:var(--bg2);border:1px solid var(--bd2);color:var(--t1);border-radius:6px;padding:7px 13px;font-size:11px;font-family:var(--mono);cursor:pointer;transition:all .15s;}
+.btn:hover{border-color:var(--acc);color:var(--acc);}
+.btn.b{background:var(--acc-g);border-color:var(--acc);color:var(--acc2);}
+.btn.g{background:var(--grn-g);border-color:var(--grn);color:var(--grn);}
+.btn.r{background:var(--red-g);border-color:var(--red);color:var(--red);}
+.btn-main{background:linear-gradient(135deg,#1e3a8a,var(--acc));color:#fff;border:none;border-radius:8px;padding:11px 20px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-main:hover{opacity:.9;}
+.btn-main:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ── CONFIG ROW ── */
+.cr{display:flex;align-items:flex-start;gap:14px;padding:13px 0;border-bottom:1px solid var(--bd);}
+.cr:last-child{border-bottom:none;}
+.ck{width:160px;flex-shrink:0;font-family:var(--mono);font-size:11px;color:var(--t2);padding-top:8px;}
+.cv{flex:1;}
+
+/* ── SPINNER ── */
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--bd2);border-top-color:var(--acc);border-radius:50%;animation:rot .6s linear infinite;}
+@keyframes rot{to{transform:rotate(360deg);}}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:36px 20px;color:var(--t2);font-family:var(--mono);font-size:12px;}
+.empty i{font-size:24px;display:block;margin-bottom:10px;opacity:.3;}
+
+/* ── STATUS BOX ── */
+.sbox{display:none;margin-bottom:14px;padding:12px 14px;border-radius:8px;font-family:var(--mono);font-size:11px;border:1px solid var(--bd2);background:var(--bg2);}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:22px;right:22px;z-index:999;display:flex;flex-direction:column;gap:7px;}
+.ti{background:var(--bg1);border:1px solid var(--bd2);border-radius:9px;padding:10px 16px;font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:9px;animation:slin .25s ease;min-width:220px;}
+.ti.ok{border-left:3px solid var(--grn);}
+.ti.er{border-left:3px solid var(--red);}
+.ti.in{border-left:3px solid var(--acc);}
+@keyframes slin{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  :root{--sb:0px;}
+  #sb{transform:translateX(-220px);width:220px;}
+  #sb.open{transform:translateX(0);}
+  #topbar{left:0;}
+  #main{left:0;}
+  #menuToggle{display:block;}
+  .g4{grid-template-columns:1fr 1fr;}
+  .g3{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:600px){
+  .g4,.g3,.g2{grid-template-columns:1fr;}
+  .page{padding:14px 14px;}
+  .topbar{padding:0 14px;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginWrap">
+  <div class="login-card">
+    <div class="lc-icon"><i class="fas fa-robot"></i></div>
+    <div class="lc-title">Zeroex Control</div>
+    <div class="lc-sub">// admin panel · enter password</div>
+    <label class="lc-label">Password</label>
+    <input class="lc-input" type="password" id="lp" placeholder="••••••••" autofocus>
+    <button class="lc-btn" id="lbtn"><i class="fas fa-unlock-alt"></i> &nbsp;Access Panel</button>
+    <div class="lc-err" id="lerr"><i class="fas fa-xmark-circle"></i> &nbsp;Wrong password</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside id="sb">
+    <div class="sb-brand">
+      <div class="sb-logo"><i class="fas fa-robot"></i></div>
+      <div>
+        <div class="sb-name">Zeroex</div>
+        <div class="sb-tag">control panel</div>
+      </div>
+    </div>
+
+    <nav class="sb-nav">
+      <div class="sb-sec">MAIN</div>
+      <button class="nav-btn active" data-p="overview"><i class="fas fa-gauge-high"></i>Overview</button>
+      <button class="nav-btn" data-p="logs"><i class="fas fa-terminal"></i>Live Logs</button>
+      <button class="nav-btn" data-p="groups"><i class="fas fa-users"></i>Groups</button>
+
+      <div class="sb-sec">CONTROL</div>
+      <button class="nav-btn" data-p="power"><i class="fas fa-power-off"></i>Power</button>
+      <button class="nav-btn" data-p="login"><i class="fas fa-cookie-bite"></i>Login / AppState</button>
+      <button class="nav-btn" data-p="config"><i class="fas fa-sliders"></i>Config</button>
+
+      <div class="sb-sec">SYSTEM</div>
+      <button class="nav-btn" data-p="system"><i class="fas fa-microchip"></i>System Info</button>
+    </nav>
+
+    <div class="sb-foot">
+      <div class="status-pill">
+        <div class="sdot" id="sbDot"></div>
+        <div>
+          <div class="sp-name" id="sbSt">Checking...</div>
+          <div class="sp-up" id="sbUp">—</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- TOPBAR -->
+  <header id="topbar">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button id="menuToggle" onclick="toggleSb()"><i class="fas fa-bars"></i></button>
+      <span class="tb-title" id="pgTitle">Overview</span>
+    </div>
+    <div class="tb-right">
+      <span class="tb-clock" id="clk">—</span>
+      <button class="tb-btn" id="rfBtn" title="Refresh"><i class="fas fa-rotate-right"></i></button>
+      <button class="tb-btn" onclick="doLogout()" title="Logout"><i class="fas fa-right-from-bracket"></i></button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main id="main">
+
+    <!-- ══ OVERVIEW ══ -->
+    <div class="page act" id="pg-overview">
+      <div class="g4 gap">
+        <div class="stat b"><div class="stat-ico b"><i class="fas fa-circle-nodes"></i></div><div class="stat-v" id="sv-st">—</div><div class="stat-l">BOT STATUS</div></div>
+        <div class="stat g"><div class="stat-ico g"><i class="fas fa-users"></i></div><div class="stat-v" id="sv-gr">—</div><div class="stat-l">ACTIVE GROUPS</div></div>
+        <div class="stat y"><div class="stat-ico y"><i class="fas fa-rotate-right"></i></div><div class="stat-v" id="sv-rs">—</div><div class="stat-l">RESTARTS</div></div>
+        <div class="stat r"><div class="stat-ico r"><i class="fas fa-clock"></i></div><div class="stat-v" id="sv-up">—</div><div class="stat-l">BOT UPTIME</div></div>
+      </div>
+      <div class="g2">
+        <div class="card">
+          <div class="ch"><div class="ch-t"><i class="fas fa-terminal"></i>Recent Logs</div><button class="btn" onclick="goPage('logs')">View All</button></div>
+          <div class="cb" style="padding:12px;"><div class="logbox" id="ovLog" style="height:210px;"></div></div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ch-t"><i class="fas fa-bolt"></i>Quick Controls</div></div>
+          <div class="cb">
+            <div class="pg">
+              <button class="pb g" onclick="botPwr('on')"><i class="fas fa-play" style="color:var(--grn)"></i>Start Bot</button>
+              <button class="pb r" onclick="botPwr('off')"><i class="fas fa-stop" style="color:var(--red)"></i>Stop Bot</button>
+              <button class="pb b" onclick="botRst()"><i class="fas fa-rotate-right" style="color:var(--acc)"></i>Restart</button>
+              <button class="pb y" onclick="goPage('groups')"><i class="fas fa-users" style="color:var(--ylw)"></i>Groups</button>
+            </div>
+            <div style="margin-top:16px;padding:12px;background:var(--bg2);border-radius:8px;border:1px solid var(--bd);">
+              <div style="font-size:10px;color:var(--t2);font-family:var(--mono);margin-bottom:4px;"><i class="fas fa-circle-info"></i> Last Heartbeat</div>
+              <div id="ovHB" style="font-family:var(--mono);font-size:12px;color:var(--t1);">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <div class="ch"><div class="ch-t"><i class="fas fa-users"></i>Active Groups <span class="badge b" id="ovGC" style="margin-left:6px">0</span></div><button class="btn" onclick="goPage('groups')">Manage</button></div>
+        <div id="ovGroups"><div class="empty"><i class="fas fa-spinner fa-spin"></i>Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- ══ LOGS ══ -->
+    <div class="page" id="pg-logs">
+      <div class="card">
+        <div class="ch">
+          <div class="ch-t"><i class="fas fa-terminal"></i>Live Logs</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" id="asBtn" onclick="togAS()" style="color:var(--grn)"><i class="fas fa-arrow-down"></i> Auto-scroll ON</button>
+            <button class="btn r" onclick="clrLogs()"><i class="fas fa-trash"></i> Clear</button>
+          </div>
+        </div>
+        <div class="cb" style="padding:12px;"><div class="logbox" id="fullLog" style="height:calc(100vh - 160px);"></div></div>
+      </div>
+    </div>
+
+    <!-- ══ GROUPS ══ -->
+    <div class="page" id="pg-groups">
+      <div class="card">
+        <div class="ch">
+          <div class="ch-t"><i class="fas fa-users"></i>All Groups</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="fi" id="grpSearch" placeholder="Search..." style="width:160px;padding:6px 10px;" oninput="filterGrps()">
+            <button class="btn b" onclick="loadGrps()"><i class="fas fa-rotate-right"></i> Refresh</button>
+          </div>
+        </div>
+        <div class="twrap">
+          <table>
+            <thead><tr><th>#</th><th>Group Name</th><th>Thread ID</th><th>Members</th><th>Action</th></tr></thead>
+            <tbody id="grpsBody"><tr><td colspan="5"><div class="empty"><i class="fas fa-spinner fa-spin"></i>Loading...</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ POWER ══ -->
+    <div class="page" id="pg-power">
+      <div class="g2">
+        <div class="card">
+          <div class="ch"><div class="ch-t"><i class="fas fa-power-off"></i>Bot Power</div></div>
+          <div class="cb">
+            <div style="padding:14px;background:var(--bg2);border-radius:9px;border:1px solid var(--bd2);margin-bottom:18px;">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:5px;">
+                <div class="sdot" id="pwDot"></div>
+                <div style="font-weight:600;font-size:14px;" id="pwSt">Checking...</div>
+              </div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--t2);" id="pwInfo">—</div>
+            </div>
+            <div class="pg gap">
+              <button class="pb g" onclick="botPwr('on')"><i class="fas fa-play" style="color:var(--grn)"></i>Start Bot</button>
+              <button class="pb r" onclick="botPwr('off')"><i class="fas fa-stop" style="color:var(--red)"></i>Stop Bot</button>
+            </div>
+            <button class="pb b" style="width:100%;" onclick="botRst()"><i class="fas fa-rotate-right" style="color:var(--acc)"></i>Restart Bot</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ch-t"><i class="fas fa-chart-bar"></i>Bot Stats</div></div>
+          <div class="cb" style="padding:0 18px;">
+            <div class="cr"><div class="ck">Connected</div><div class="cv"><span id="pw-cn" class="badge">—</span></div></div>
+            <div class="cr"><div class="ck">Manually Off</div><div class="cv"><span id="pw-mo" class="badge">—</span></div></div>
+            <div class="cr"><div class="ck">Restarts</div><div class="cv" id="pw-rs" style="font-family:var(--mono);font-size:12px;color:var(--t1);">—</div></div>
+            <div class="cr"><div class="ck">Bot Uptime</div><div class="cv" id="pw-up" style="font-family:var(--mono);font-size:12px;color:var(--t1);">—</div></div>
+            <div class="cr"><div class="ck">Active Groups</div><div class="cv" id="pw-gr" style="font-family:var(--mono);font-size:12px;color:var(--t1);">—</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ LOGIN / APPSTATE ══ -->
+    <div class="page" id="pg-login">
+      <div class="astabs">
+        <button class="astab act" id="ast-server" onclick="swAS('server')"><i class="fab fa-facebook"></i> &nbsp;ID Login</button>
+        <button class="astab" id="ast-cookie" onclick="swAS('cookie')"><i class="fas fa-cookie-bite"></i> &nbsp;Cookie Paste</button>
+      </div>
+
+      <!-- Tab: Server Login -->
+      <div id="as-server">
+        <div class="g2">
+          <div class="card">
+            <div class="ch"><div class="ch-t"><i class="fab fa-facebook" style="color:#1877f2"></i>Facebook Login</div></div>
+            <div class="cb">
+              <p style="font-size:12px;color:var(--t1);margin-bottom:18px;line-height:1.8;">Email/Phone + Password দিলে <strong>server FCA দিয়ে real Facebook login করবে</strong> — cookie বের করে <code style="font-family:var(--mono);background:var(--bg2);padding:1px 5px;border-radius:3px;">appstate.json</code> এ auto-save হবে। Bot restart লাগবে না।</p>
+              <div class="fg">
+                <label class="fl">Email / Phone</label>
+                <input class="fi" type="text" id="fb-em" placeholder="email@gmail.com or 01XXXXXXXXX" autocomplete="off">
+              </div>
+              <div class="fg">
+                <label class="fl">Password</label>
+                <div style="position:relative;">
+                  <input class="fi" type="password" id="fb-pw" placeholder="Facebook password" style="padding-right:40px;" autocomplete="new-password">
+                  <button onclick="togPwEye()" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;" id="pwEye"><i class="fas fa-eye"></i></button>
+                </div>
+              </div>
+              <div class="fg">
+                <label class="fl">2FA Secret Key <span style="color:var(--t3);font-weight:400;">(Optional)</span></label>
+                <input class="fi" type="text" id="fb-2f" placeholder="TOTP secret — not the 6-digit code" autocomplete="off">
+                <div class="fh">2FA enabled হলে secret key দাও। OTP code নয়।</div>
+              </div>
+              <div class="sbox" id="fbSt"><span id="fbStTx"></span></div>
+              <button class="btn-main" id="fbBtn" onclick="doFbLogin()"><i class="fab fa-facebook"></i>Login — Cookie Auto-Save</button>
+              <div style="margin-top:12px;padding:10px 12px;background:var(--red-g);border:1px solid rgba(248,113,113,.2);border-radius:7px;font-size:11px;color:var(--red);font-family:var(--mono);">
+                <i class="fas fa-shield-halved"></i> Password server এ থাকবে, log হবে না।
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card gap">
+              <div class="ch"><div class="ch-t"><i class="fas fa-check-circle"></i>Login Result</div><button class="btn" onclick="swAS('cookie');loadAS()"><i class="fas fa-eye"></i> View Cookie</button></div>
+              <div class="cb"><div id="fbRes"><div class="empty"><i class="fas fa-arrow-left"></i>Login করলে result আসবে</div></div></div>
+            </div>
+            <div class="card">
+              <div class="ch"><div class="ch-t"><i class="fas fa-circle-info"></i>How It Works</div></div>
+              <div class="cb" style="padding:14px;">
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <div style="display:flex;gap:10px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--acc-g);border:1px solid rgba(79,142,247,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;font-weight:700;color:var(--acc);">1</div><div style="font-size:11px;color:var(--t1);padding-top:3px;font-family:var(--mono);">Form submit করো</div></div>
+                  <div style="display:flex;gap:10px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--acc-g);border:1px solid rgba(79,142,247,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;font-weight:700;color:var(--acc);">2</div><div style="font-size:11px;color:var(--t1);padding-top:3px;font-family:var(--mono);">Server FCA দিয়ে real Facebook login করে</div></div>
+                  <div style="display:flex;gap:10px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--grn-g);border:1px solid rgba(52,211,153,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;font-weight:700;color:var(--grn);">3</div><div style="font-size:11px;color:var(--t1);padding-top:3px;font-family:var(--mono);">Cookie বের হয় → appstate.json auto-save</div></div>
+                  <div style="display:flex;gap:10px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--grn-g);border:1px solid rgba(52,211,153,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;font-weight:700;color:var(--grn);">4</div><div style="font-size:11px;color:var(--t1);padding-top:3px;font-family:var(--mono);">Bot auto-restart — নতুন session দিয়ে চালু</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Cookie Paste -->
+      <div id="as-cookie" style="display:none;">
+        <div class="g2">
+          <div class="card">
+            <div class="ch"><div class="ch-t"><i class="fas fa-cookie-bite"></i>AppState Upload / Paste</div></div>
+            <div class="cb">
+              <div class="dz" id="dz" onclick="document.getElementById('asFile').click()">
+                <i class="fas fa-file-arrow-up"></i>
+                <p>Click or drag & drop</p>
+                <small>appstate.json · c3c-fbstate format</small>
+              </div>
+              <input type="file" id="asFile" accept=".json" style="display:none;" onchange="onAsFile(event)">
+              <div class="fg">
+                <label class="fl">Or Paste JSON</label>
+                <textarea class="fi" id="asPaste" placeholder='[{"key":"c_user","value":"..."}]'></textarea>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn-main" style="flex:1;" onclick="uploadAS()"><i class="fas fa-upload"></i>Upload & Apply</button>
+                <button class="btn" onclick="clrAS()"><i class="fas fa-xmark"></i></button>
+              </div>
+              <div style="margin-top:12px;padding:10px;background:var(--ylw-g);border:1px solid rgba(251,191,36,.2);border-radius:7px;font-size:11px;color:var(--ylw);font-family:var(--mono);">
+                <i class="fas fa-triangle-exclamation"></i> Upload এর পর bot restart দাও।
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="ch"><div class="ch-t"><i class="fas fa-eye"></i>Current AppState</div><button class="btn" onclick="loadAS()"><i class="fas fa-rotate-right"></i> Load</button></div>
+            <div class="cb">
+              <div id="asInfo" style="font-family:var(--mono);font-size:11px;color:var(--t2);margin-bottom:10px;">Load to view current appstate.</div>
+              <textarea class="fi" id="asView" readonly style="height:200px;"></textarea>
+              <div style="display:flex;gap:8px;margin-top:10px;">
+                <button class="btn b" onclick="cpAS()"><i class="fas fa-copy"></i> Copy</button>
+                <button class="btn g" onclick="dlAS()"><i class="fas fa-download"></i> Download</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- c3c steps -->
+        <div class="card" style="margin-top:16px;">
+          <div class="ch"><div class="ch-t"><i class="fas fa-circle-info"></i>c3c-fbstate দিয়ে Cookie নেওয়ার নিয়ম</div></div>
+          <div class="cb">
+            <div class="g4">
+              <div style="padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--bd2);text-align:center;"><div style="font-size:20px;margin-bottom:8px;">🧩</div><div style="font-size:11px;font-weight:700;margin-bottom:4px;">Step 1</div><div style="font-size:10px;color:var(--t2);font-family:var(--mono);">Chrome এ c3c-fbstate install</div></div>
+              <div style="padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--bd2);text-align:center;"><div style="font-size:20px;margin-bottom:8px;">🔐</div><div style="font-size:11px;font-weight:700;margin-bottom:4px;">Step 2</div><div style="font-size:10px;color:var(--t2);font-family:var(--mono);">Chrome এ Facebook login</div></div>
+              <div style="padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--bd2);text-align:center;"><div style="font-size:20px;margin-bottom:8px;">📤</div><div style="font-size:11px;font-weight:700;margin-bottom:4px;">Step 3</div><div style="font-size:10px;color:var(--t2);font-family:var(--mono);">Extension → Get State → Copy</div></div>
+              <div style="padding:14px;background:var(--bg2);border-radius:8px;border:1px solid var(--bd2);text-align:center;"><div style="font-size:20px;margin-bottom:8px;">⬆️</div><div style="font-size:11px;font-weight:700;margin-bottom:4px;">Step 4</div><div style="font-size:10px;color:var(--t2);font-family:var(--mono);">Paste → Upload & Apply</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CONFIG ══ -->
+    <div class="page" id="pg-config">
+      <div class="g2">
+        <div class="card">
+          <div class="ch"><div class="ch-t"><i class="fas fa-sliders"></i>Bot Config</div><button class="btn b" onclick="saveConf()"><i class="fas fa-floppy-disk"></i> Save</button></div>
+          <div class="cb" style="padding:0 18px;">
+            <div class="cr"><div class="ck">Bot Name</div><div class="cv"><input class="fi" id="cf-bn" placeholder="Zeroex Bot"></div></div>
+            <div class="cr"><div class="ck">Prefix</div><div class="cv"><input class="fi" id="cf-px" style="width:80px;" placeholder="o"></div></div>
+            <div class="cr"><div class="ck">System Mode</div><div class="cv"><select class="fsel" id="cf-sm" style="width:180px;"><option value="all">all — Everyone</option><option value="gcadmin">gcadmin — Group Admins</option><option value="mod">mod — Moderators</option><option value="admin">admin — Bot Admins</option></select></div></div>
+            <div class="cr"><div class="ck">Language</div><div class="cv"><select class="fsel" id="cf-ln" style="width:120px;"><option value="en">en</option><option value="bn">bn</option></select></div></div>
+            <div class="cr"><div class="ck">MongoDB URI</div><div class="cv"><input class="fi" id="cf-mg" placeholder="mongodb+srv://..."></div></div>
+            <div class="cr"><div class="ck">Auto Create DB</div><div class="cv"><div class="tog"><button class="to on" id="cf-adb-t" onclick="setTog('adb',true)">ON</button><button class="to" id="cf-adb-f" onclick="setTog('adb',false)">OFF</button></div></div></div>
+            <div class="cr"><div class="ck">Notification</div><div class="cv"><div class="tog"><button class="to on" id="cf-noti-t" onclick="setTog('noti',true)">ON</button><button class="to" id="cf-noti-f" onclick="setTog('noti',false)">OFF</button></div></div></div>
+            <div class="cr"><div class="ck">Allow Inbox</div><div class="cv"><div class="tog"><button class="to on" id="cf-inb-t" onclick="setTog('inb',true)">ON</button><button class="to" id="cf-inb-f" onclick="setTog('inb',false)">OFF</button></div></div></div>
+            <div class="cr"><div class="ck">Auto Clean</div><div class="cv"><div class="tog"><button class="to on" id="cf-acl-t" onclick="setTog('acl',true)">ON</button><button class="to" id="cf-acl-f" onclick="setTog('acl',false)">OFF</button></div></div></div>
+            <div class="cr"><div class="ck">Self Listen</div><div class="cv"><div class="tog"><button class="to" id="cf-sl-t" onclick="setTog('sl',true)">ON</button><button class="to on" id="cf-sl-f" onclick="setTog('sl',false)">OFF</button></div></div></div>
+          </div>
+        </div>
+        <div>
+          <div class="card gap">
+            <div class="ch"><div class="ch-t"><i class="fas fa-crown"></i>Admin Bot IDs</div><button class="btn b" onclick="saveConf()"><i class="fas fa-floppy-disk"></i> Save</button></div>
+            <div class="cb"><div class="tag-wrap" id="adm-wrap" onclick="document.getElementById('adm-in').focus()"><input class="tag-in" id="adm-in" placeholder="Add UID → Enter" onkeydown="onTag(event,'adm')"></div><div class="fh" style="margin-top:5px;">Enter দিলে add হবে</div></div>
+          </div>
+          <div class="card gap">
+            <div class="ch"><div class="ch-t"><i class="fas fa-shield-halved"></i>Moderator IDs</div><button class="btn b" onclick="saveConf()"><i class="fas fa-floppy-disk"></i> Save</button></div>
+            <div class="cb"><div class="tag-wrap" id="mod-wrap" onclick="document.getElementById('mod-in').focus()"><input class="tag-in" id="mod-in" placeholder="Add UID → Enter" onkeydown="onTag(event,'mod')"></div></div>
+          </div>
+          <div class="card gap">
+            <div class="ch"><div class="ch-t"><i class="fas fa-ban"></i>Disabled Commands</div><button class="btn b" onclick="saveConf()"><i class="fas fa-floppy-disk"></i> Save</button></div>
+            <div class="cb"><div class="tag-wrap" id="cmd-wrap" onclick="document.getElementById('cmd-in').focus()"><input class="tag-in" id="cmd-in" placeholder="command.js → Enter" onkeydown="onTag(event,'cmd')"></div></div>
+          </div>
+          <div class="card">
+            <div class="ch"><div class="ch-t"><i class="fas fa-calendar-xmark"></i>Disabled Events</div><button class="btn b" onclick="saveConf()"><i class="fas fa-floppy-disk"></i> Save</button></div>
+            <div class="cb"><div class="tag-wrap" id="evt-wrap" onclick="document.getElementById('evt-in').focus()"><input class="tag-in" id="evt-in" placeholder="event.js → Enter" onkeydown="onTag(event,'evt')"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SYSTEM ══ -->
+    <div class="page" id="pg-system">
+      <div class="g3 gap">
+        <div class="stat b"><div class="stat-ico b"><i class="fas fa-memory"></i></div><div class="stat-v" id="sy-rm">—</div><div class="stat-l">RAM USAGE</div></div>
+        <div class="stat g"><div class="stat-ico g"><i class="fas fa-hard-drive"></i></div><div class="stat-v" id="sy-dk">—</div><div class="stat-l">DISK USAGE</div></div>
+        <div class="stat y"><div class="stat-ico y"><i class="fas fa-clock-rotate-left"></i></div><div class="stat-v" id="sy-ut">—</div><div class="stat-l">SYSTEM UPTIME</div></div>
+      </div>
+      <div class="g2">
+        <div class="card">
+          <div class="ch"><div class="ch-t"><i class="fas fa-chart-pie"></i>Resource Usage</div></div>
+          <div class="cb">
+            <div class="prw"><div class="prh"><span class="prl">RAM</span><span class="prv" id="sy-rmL">—</span></div><div class="prb"><div class="prf b" id="sy-rmB" style="width:0%"></div></div></div>
+            <div class="prw"><div class="prh"><span class="prl">Disk</span><span class="prv" id="sy-dkL">—</span></div><div class="prb"><div class="prf g" id="sy-dkB" style="width:0%"></div></div></div>
+            <div class="prw"><div class="prh"><span class="prl">CPU Load (1m)</span><span class="prv" id="sy-cpL">—</span></div><div class="prb"><div class="prf y" id="sy-cpB" style="width:0%"></div></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ch-t"><i class="fas fa-server"></i>System Info</div></div>
+          <div class="cb" style="padding:0 18px;">
+            <div class="cr"><div class="ck">Platform</div><div class="cv" id="sy-pl" style="font-family:var(--mono);font-size:11px;color:var(--t1);">—</div></div>
+            <div class="cr"><div class="ck">Architecture</div><div class="cv" id="sy-ar" style="font-family:var(--mono);font-size:11px;color:var(--t1);">—</div></div>
+            <div class="cr"><div class="ck">CPU Model</div><div class="cv" id="sy-cp" style="font-family:var(--mono);font-size:11px;color:var(--t1);">—</div></div>
+            <div class="cr"><div class="ck">CPU Cores</div><div class="cv" id="sy-co" style="font-family:var(--mono);font-size:11px;color:var(--t1);">—</div></div>
+            <div class="cr"><div class="ck">Hostname</div><div class="cv" id="sy-hn" style="font-family:var(--mono);font-size:11px;color:var(--t1);">—</div></div>
+            <div class="cr"><div class="ck">Load Avg</div><div class="cv" id="sy-la" style="font-family:var(--mono);font-size:11px;color:var(--t1);">—</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════
+// SESSION — localStorage token
+// ════════════════════════════════
+const SESSION_KEY = 'zx_session';
+let authPwd = '';
+
+function saveSession(pwd){ authPwd=pwd; try{localStorage.setItem(SESSION_KEY,btoa(pwd));}catch{} }
+function loadSession(){ try{const t=localStorage.getItem(SESSION_KEY); if(t){authPwd=atob(t);return true;}}catch{} return false; }
+function clearSession(){ authPwd=''; try{localStorage.removeItem(SESSION_KEY);}catch{} }
+function hdr(){ return {'Content-Type':'application/json','x-admin-password':authPwd}; }
+
+// ════════════════════════════════
+// INIT
+// ════════════════════════════════
+window.onload = async () => {
+  if(loadSession()){ const ok=await verifySession(); if(ok){enterApp();return;} clearSession(); }
+  document.getElementById('loginWrap').style.display='flex';
+};
+
+async function verifySession(){
+  try{ const r=await fetch('/api/bot-stats'); return r.ok; }catch{ return false; }
+}
+
+// ════════════════════════════════
+// LOGIN
+// ════════════════════════════════
+document.getElementById('lbtn').onclick = doLogin;
+document.getElementById('lp').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+
+async function doLogin(){
+  const pwd=document.getElementById('lp').value.trim();
+  if(!pwd) return;
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
+    const d=await r.json();
+    if(d.success){ saveSession(pwd); enterApp(); }
+    else showErr();
+  }catch{ showErr(); }
+}
+
+function showErr(){
+  const e=document.getElementById('lerr'); e.style.display='block';
+  setTimeout(()=>e.style.display='none',3000);
+}
+
+function enterApp(){
+  document.getElementById('loginWrap').style.display='none';
+  document.getElementById('app').style.display='block';
+  initApp();
+}
+
+function doLogout(){
+  clearSession();
+  document.getElementById('loginWrap').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('lp').value='';
+}
+
+// ════════════════════════════════
+// NAV
+// ════════════════════════════════
+const pageTitles={overview:'Overview',logs:'Live Logs',groups:'Groups',power:'Power Control','login':'Login / AppState',config:'Configuration',system:'System Info'};
+
+document.querySelectorAll('.nav-btn').forEach(b=>{
+  b.addEventListener('click',()=>goPage(b.dataset.p));
+});
+
+function goPage(id){
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.p===id));
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('act',p.id==='pg-'+id));
+  document.getElementById('pgTitle').textContent=pageTitles[id]||id;
+  if(id==='groups') loadGrps();
+  if(id==='system') loadSys();
+  if(id==='config') loadConf();
+  // close mobile sb
+  document.getElementById('sb').classList.remove('open');
+}
+
+function toggleSb(){ document.getElementById('sb').classList.toggle('open'); }
+
+// ════════════════════════════════
+// CLOCK
+// ════════════════════════════════
+function initApp(){
+  clkTick(); setInterval(clkTick,1000);
+  statTick(); setInterval(statTick,5000);
+  logTick(); setInterval(logTick,3000);
+  document.getElementById('rfBtn').onclick=()=>{statTick();logTick();toast('Refreshed','in');};
+  loadGrps();
+}
+
+function clkTick(){
+  const n=new Date();
+  document.getElementById('clk').textContent=n.toLocaleTimeString('en-GB')+' · '+n.toLocaleDateString('en-GB');
+}
+
+// ════════════════════════════════
+// STATS
+// ════════════════════════════════
+async function statTick(){
+  try{
+    const r=await fetch('/api/bot-stats'); const d=await r.json();
+    const on=d.connected;
+    // sidebar
+    const dot=document.getElementById('sbDot'); dot.className='sdot '+(on?'on':'off');
+    document.getElementById('sbSt').textContent=d.status||'—';
+    document.getElementById('sbUp').textContent=d.botUptime?fmtUp(d.botUptime):'—';
+    // overview stats
+    const sc=document.getElementById('sv-st'); sc.textContent=on?'Online':'Offline'; sc.style.color=on?'var(--grn)':'var(--red)';
+    document.getElementById('sv-gr').textContent=d.groups??0;
+    document.getElementById('sv-rs').textContent=d.restartCount??0;
+    document.getElementById('sv-up').textContent=d.botUptime?fmtUp(d.botUptime):'—';
+    const hb=document.getElementById('ovHB'); if(hb) hb.textContent=d.lastHeartbeat?new Date(d.lastHeartbeat).toLocaleTimeString():'—';
+    // power page
+    const pd=document.getElementById('pwDot'); if(pd){ pd.className='sdot '+(on?'on':'off'); document.getElementById('pwSt').textContent=d.status; document.getElementById('pwInfo').textContent=d.botUptime?'Uptime: '+fmtUp(d.botUptime):'Not running'; document.getElementById('pw-cn').textContent=on?'YES':'NO'; document.getElementById('pw-cn').className='badge '+(on?'g':'r'); document.getElementById('pw-mo').textContent=d.manuallyOff?'YES':'NO'; document.getElementById('pw-mo').className='badge '+(d.manuallyOff?'r':'g'); document.getElementById('pw-rs').textContent=d.restartCount??'—'; document.getElementById('pw-up').textContent=d.botUptime?fmtUp(d.botUptime):'—'; document.getElementById('pw-gr').textContent=d.groups??'—'; }
+    const gc=document.getElementById('ovGC'); if(gc) gc.textContent=d.activeGroups??0;
+  }catch{}
+}
+
+// ════════════════════════════════
+// LOGS
+// ════════════════════════════════
+let logCache=[], autoScroll=true;
+
+async function logTick(){
+  try{ const r=await fetch('/api/logs'); const l=await r.json(); if(Array.isArray(l)){ logCache=l; renderLogs(); } }catch{}
+}
+
+function renderLogs(){
+  ['ovLog','fullLog'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    const bot=el.scrollHeight-el.clientHeight<=el.scrollTop+5;
+    const html=logCache.map(log=>{
+      // Timestamp
+      const ts = log.timestamp || log.time;
+      const t = ts ? `<span class="lt">${new Date(ts).toLocaleTimeString('en-GB')}</span>` : '';
+      // Message body
+      const rawMsg = log.message || log.body || '';
+      const m = esc(rawMsg || JSON.stringify(log));
+      // Group + User context badge
+      let ctx = '';
+      if(log.groupName || log.userName){
+        const gn = log.groupName ? `<span style="background:rgba(79,142,247,.1);color:var(--acc2);border:1px solid rgba(79,142,247,.2);border-radius:3px;padding:1px 6px;font-size:10px;margin-right:4px;">${esc(log.groupName)}</span>` : '';
+        const un = log.userName ? `<span style="background:rgba(52,211,153,.08);color:var(--grn);border:1px solid rgba(52,211,153,.18);border-radius:3px;padding:1px 6px;font-size:10px;margin-right:4px;">${esc(log.userName)}</span>` : '';
+        ctx = `<span style="display:inline-flex;gap:3px;align-items:center;margin-right:6px;">${gn}${un}</span>`;
+      }
+      let cl='ll';
+      if(/error|fail|❌/i.test(m)) cl='ll er';
+      else if(/warn|⚠/i.test(m)) cl='ll wn';
+      else if(/success|✅|connect|started/i.test(m)) cl='ll ok';
+      return `<div class="${cl}" style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);">${t}${ctx}${m}</div>`;
+    }).reverse().join('');
+    el.innerHTML=html||'<div class="empty"><i class="fas fa-terminal"></i>No logs</div>';
+    if(autoScroll&&(bot||id==='ovLog')) el.scrollTop=el.scrollHeight;
+  });
+}
+
+function togAS(){ autoScroll=!autoScroll; const b=document.getElementById('asBtn'); b.style.color=autoScroll?'var(--grn)':'var(--t2)'; b.innerHTML=`<i class="fas fa-arrow-down"></i> Auto-scroll ${autoScroll?'ON':'OFF'}`; }
+function clrLogs(){ logCache=[]; renderLogs(); toast('Logs cleared','in'); }
+
+// ════════════════════════════════
+// GROUPS
+// ════════════════════════════════
+let allGrps=[];
+
+async function loadGrps(){
+  const b=document.getElementById('grpsBody'); if(b) b.innerHTML='<tr><td colspan="5"><div class="empty"><i class="fas fa-spinner fa-spin"></i>Loading...</div></td></tr>';
+  try{
+    const r=await fetch('/api/groups',{headers:hdr()}); allGrps=await r.json();
+    renderGrps(allGrps);
+    // overview mini
+    const ov=document.getElementById('ovGroups');
+    if(ov){
+      if(!allGrps.length){ ov.innerHTML='<div class="empty"><i class="fas fa-users-slash"></i>No groups</div>'; }
+      else{
+        const prev=allGrps.slice(0,5);
+        ov.innerHTML='<table><thead><tr><th>Group Name</th><th>Thread ID</th><th>Members</th></tr></thead><tbody>'+
+        prev.map(g=>`<tr><td style="font-weight:500;">${esc(g.threadName||g.name||'Unknown')}</td><td><code style="font-family:var(--mono);font-size:10px;color:var(--t2);">${g.threadID||'—'}</code></td><td>${g.participants||g.participantIDs?.length||'—'}</td></tr>`).join('')+
+        '</tbody></table>'+(allGrps.length>5?`<div style="padding:8px 14px;font-size:11px;color:var(--t2);font-family:var(--mono);">+${allGrps.length-5} more</div>`:'');
+      }
+    }
+  }catch{ if(b) b.innerHTML='<tr><td colspan="5"><div class="empty">Failed to load</div></td></tr>'; }
+}
+
+function renderGrps(list){
+  const b=document.getElementById('grpsBody'); if(!b) return;
+  if(!list.length){ b.innerHTML='<tr><td colspan="5"><div class="empty"><i class="fas fa-users-slash"></i>No groups</div></td></tr>'; return; }
+  b.innerHTML=list.map((g,i)=>`<tr><td style="color:var(--t2);font-family:var(--mono);">${i+1}</td><td style="font-weight:500;">${esc(g.threadName||g.name||'Unknown')}</td><td><code style="font-family:var(--mono);font-size:10px;color:var(--t2);">${g.threadID||'—'}</code></td><td>${g.participants??g.participantIDs?.length??'—'}</td><td><button class="btn r" onclick="leaveGrp('${g.threadID}')"><i class="fas fa-right-from-bracket"></i> Leave</button></td></tr>`).join('');
+}
+
+function filterGrps(){ const q=(document.getElementById('grpSearch')?.value||'').toLowerCase(); renderGrps(allGrps.filter(g=>(g.threadName||g.name||'').toLowerCase().includes(q)||(g.threadID||'').includes(q))); }
+
+async function leaveGrp(id){
+  if(!confirm(`Leave group ${id}?`)) return;
+  try{ const r=await fetch('/api/leave-group',{method:'POST',headers:hdr(),body:JSON.stringify({threadID:id})}); const d=await r.json(); if(d.success){toast('Left group','ok');loadGrps();}else toast('Failed','er'); }catch(e){ toast(e.message,'er'); }
+}
+
+// ════════════════════════════════
+// POWER
+// ════════════════════════════════
+async function botPwr(a){
+  try{ const r=await fetch('/api/bot-power',{method:'POST',headers:hdr(),body:JSON.stringify({action:a})}); const d=await r.json(); if(d.success) toast('Bot '+(a==='on'?'started':'stopped'),'ok'); else toast(d.error||'Failed','er'); setTimeout(statTick,1500); }catch(e){ toast(e.message,'er'); }
+}
+
+async function botRst(){
+  if(!confirm('Restart bot?')) return;
+  try{ const r=await fetch('/restart',{method:'POST',headers:hdr()}); const d=await r.json(); if(d.success) toast('Restarting...','ok'); else toast('Failed','er'); setTimeout(statTick,3000); }catch(e){ toast(e.message,'er'); }
+}
+
+// ════════════════════════════════
+// APPSTATE TABS
+// ════════════════════════════════
+function swAS(t){
+  ['server','cookie'].forEach(x=>{ document.getElementById('as-'+x).style.display=x===t?'block':'none'; document.getElementById('ast-'+x).classList.toggle('act',x===t); });
+}
+
+// Drag & drop
+const dz=document.getElementById('dz');
+if(dz){ dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--acc)';}); dz.addEventListener('dragleave',()=>dz.style.borderColor=''); dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';const f=e.dataTransfer.files[0];if(f)readAsFile(f);}); }
+
+function onAsFile(e){ const f=e.target.files[0]; if(f) readAsFile(f); }
+function readAsFile(f){
+  if(!f.name.endsWith('.json')){ toast('JSON file চাই','er'); return; }
+  const rd=new FileReader(); rd.onload=ev=>{ document.getElementById('asPaste').value=ev.target.result; dz.querySelector('p').textContent='✅ '+f.name; toast('File loaded','ok'); }; rd.readAsText(f);
+}
+
+async function uploadAS(){
+  const raw=document.getElementById('asPaste').value.trim(); if(!raw){ toast('No data','er'); return; }
+  let p; try{ p=JSON.parse(raw); }catch{ toast('Invalid JSON','er'); return; }
+  if(!Array.isArray(p)){ toast('Must be array','er'); return; }
+  try{ const r=await fetch('/appstate',{method:'POST',headers:hdr(),body:JSON.stringify({data:p})}); const d=await r.json(); if(d.success) toast('AppState uploaded! Restart bot.','ok'); else toast(d.error||'Failed','er'); }catch(e){ toast(e.message,'er'); }
+}
+
+async function loadAS(){
+  try{ const r=await fetch('/appstate',{headers:hdr()}); const d=await r.json(); const t=JSON.stringify(d,null,2); document.getElementById('asView').value=t; document.getElementById('asInfo').textContent=`${Array.isArray(d)?d.length+' cookies':'Loaded'}`; toast('Loaded','ok'); }catch{ toast('Error','er'); }
+}
+
+function cpAS(){ const el=document.getElementById('asView'); if(!el.value){toast('Nothing to copy','er');return;} navigator.clipboard.writeText(el.value).then(()=>toast('Copied','ok')); }
+function dlAS(){ const el=document.getElementById('asView'); if(!el.value){toast('Nothing to download','er');return;} const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([el.value],{type:'application/json'})); a.download='appstate.json'; a.click(); toast('Downloaded','ok'); }
+function clrAS(){ document.getElementById('asPaste').value=''; document.getElementById('asFile').value=''; dz.querySelector('p').textContent='Click or drag & drop'; }
+
+// ════════════════════════════════
+// FB SERVER LOGIN
+// ════════════════════════════════
+function togPwEye(){ const i=document.getElementById('fb-pw'),e=document.getElementById('pwEye').querySelector('i'); if(i.type==='password'){i.type='text';e.className='fas fa-eye-slash';}else{i.type='password';e.className='fas fa-eye';} }
+
+async function doFbLogin(){
+  const em=document.getElementById('fb-em').value.trim();
+  const pw=document.getElementById('fb-pw').value.trim();
+  const fa=document.getElementById('fb-2f').value.trim();
+  if(!em||!pw){ toast('Email ও Password দাও','er'); return; }
+
+  const sbox=document.getElementById('fbSt'), stxt=document.getElementById('fbStTx'), btn=document.getElementById('fbBtn'), res=document.getElementById('fbRes');
+
+  function setSt(msg,color,bg,bd){ sbox.style.cssText=`display:block;margin-bottom:14px;padding:12px 14px;border-radius:8px;font-family:var(--mono);font-size:11px;background:${bg||'var(--bg2)'};border:1px solid ${bd||'var(--bd2)'};`; stxt.style.color=color||'var(--t1)'; stxt.innerHTML=msg; }
+
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span>&nbsp; Logging in...';
+  setSt('<span class="spin"></span>&nbsp; Connecting to Facebook...');
+
+  try{
+    setTimeout(()=>setSt('<span class="spin"></span>&nbsp; Verifying credentials...'),800);
+    setTimeout(()=>setSt('<span class="spin"></span>&nbsp; Extracting cookies...'),2500);
+
+    const r=await fetch('/api/fb-login-now',{method:'POST',headers:hdr(),body:JSON.stringify({email:em,password:pw,twofactor:fa})});
+    const d=await r.json();
+
+    if(!d.success){
+      setSt('❌ '+(d.error||'Login failed'),'var(--red)','var(--red-g)','rgba(248,113,113,.3)');
+      res.innerHTML=`<div style="padding:12px;background:var(--red-g);border:1px solid rgba(248,113,113,.2);border-radius:8px;font-family:var(--mono);font-size:11px;color:var(--red);">❌ ${esc(d.error||'Failed')}</div>`;
+    } else {
+      setSt('✅ Login successful! Cookie saved → Bot restarting...','var(--grn)','var(--grn-g)','rgba(52,211,153,.3)');
+      toast('Login successful! Cookie saved.','ok');
+      res.innerHTML=`<div style="padding:12px;background:var(--grn-g);border:1px solid rgba(52,211,153,.25);border-radius:8px;font-family:var(--mono);font-size:11px;color:var(--grn);margin-bottom:10px;">✅ Login successful!<br><span style="color:var(--t2);margin-top:3px;display:block;">${d.cookieCount||'?'} cookies → appstate.json</span></div><button class="btn b" style="width:100%;" onclick="swAS('cookie');loadAS()"><i class="fas fa-eye"></i> View Cookie</button>`;
+      document.getElementById('fb-pw').value='';
+      setTimeout(async()=>{ try{await fetch('/restart',{method:'POST',headers:hdr()});}catch{} statTick(); },1000);
+    }
+  }catch(e){ setSt('❌ '+e.message,'var(--red)','var(--red-g)','rgba(248,113,113,.3)'); }
+
+  btn.disabled=false; btn.innerHTML='<i class="fab fa-facebook"></i>Login — Cookie Auto-Save';
+}
+
+// ════════════════════════════════
+// CONFIG
+// ════════════════════════════════
+let cfgToggles={adb:true,noti:true,inb:true,acl:true,sl:false};
+let tags={adm:[],mod:[],cmd:[],evt:[]};
+
+async function loadConf(){
+  try{
+    const r=await fetch('/api/config',{headers:hdr()}); const c=await r.json();
+    document.getElementById('cf-bn').value=c.BOTNAME||'';
+    document.getElementById('cf-px').value=c.PREFIX||'';
+    document.getElementById('cf-sm').value=c.systemMode||'all';
+    document.getElementById('cf-ln').value=c.language||'en';
+    document.getElementById('cf-mg').value=c.DATABASE?.MONGODB_URI||'';
+    const bools={adb:c.autoCreateDB,noti:c.NOTIFICATION,inb:c.allowInbox,acl:c.autoClean,sl:c.FCAOption?.selfListen};
+    for(const[k,v] of Object.entries(bools)){ cfgToggles[k]=!!v; document.getElementById(`cf-${k}-t`)?.classList.toggle('on',!!v); document.getElementById(`cf-${k}-f`)?.classList.toggle('on',!v); }
+    tags.adm=[...(c.ADMINBOT||[])]; tags.mod=[...(c.mod||[])]; tags.cmd=[...(c.commandDisabled||[])]; tags.evt=[...(c.eventDisabled||[])];
+    renderTags('adm'); renderTags('mod'); renderTags('cmd'); renderTags('evt');
+  }catch{ toast('Config load failed','er'); }
+}
+
+function setTog(k,v){ cfgToggles[k]=v; document.getElementById(`cf-${k}-t`)?.classList.toggle('on',v===true); document.getElementById(`cf-${k}-f`)?.classList.toggle('on',v===false); }
+
+async function saveConf(){
+  const payload={
+    BOTNAME:document.getElementById('cf-bn').value,
+    PREFIX:document.getElementById('cf-px').value,
+    systemMode:document.getElementById('cf-sm').value,
+    language:document.getElementById('cf-ln').value,
+    autoCreateDB:cfgToggles.adb, NOTIFICATION:cfgToggles.noti, allowInbox:cfgToggles.inb, autoClean:cfgToggles.acl,
+    ADMINBOT:tags.adm, mod:tags.mod, commandDisabled:tags.cmd, eventDisabled:tags.evt,
+    DATABASE_MONGODB_URI:document.getElementById('cf-mg').value,
+    selfListen:cfgToggles.sl
+  };
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:hdr(),body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(d.success) toast('Config saved! Bot reloading...','ok');
+    else toast(d.error||'Save failed','er');
+  }catch(e){ toast(e.message,'er'); }
+}
+
+// ════════════════════════════════
+// TAG INPUT
+// ════════════════════════════════
+function onTag(e,k){ if(e.key!=='Enter') return; e.preventDefault(); const inp=document.getElementById(k+'-in'); const v=inp.value.trim(); if(!v) return; if(!tags[k].includes(v)){ tags[k].push(v); renderTags(k); } inp.value=''; }
+
+function removeTag(k,v){ tags[k]=tags[k].filter(x=>x!==v); renderTags(k); }
+
+function renderTags(k){
+  const wrap=document.getElementById(k+'-wrap'); const inp=document.getElementById(k+'-in');
+  wrap.querySelectorAll('.tag').forEach(t=>t.remove());
+  tags[k].forEach(v=>{ const t=document.createElement('span'); t.className='tag'; t.innerHTML=`${esc(v)}<button class="tag-x" onclick="removeTag('${k}','${v}')">×</button>`; wrap.insertBefore(t,inp); });
+}
+
+// ════════════════════════════════
+// SYSTEM
+// ════════════════════════════════
+async function loadSys(){
+  try{
+    const r=await fetch('/api/system'); const d=await r.json();
+    const rp=d.ram?.percent||0, dp=d.disk?.percent||0, cp=Math.min((d.loadavg?.[0]||0)/(d.cores||1)*100,100);
+    document.getElementById('sy-rm').textContent=rp.toFixed(1)+'%';
+    document.getElementById('sy-dk').textContent=dp.toFixed(1)+'%';
+    document.getElementById('sy-ut').textContent=fmtUp(d.uptime*1000);
+    document.getElementById('sy-rmL').textContent=fmtB(d.ram?.used)+' / '+fmtB(d.ram?.total);
+    document.getElementById('sy-dkL').textContent=fmtB(d.disk?.used)+' / '+fmtB(d.disk?.total);
+    document.getElementById('sy-cpL').textContent=cp.toFixed(1)+'%';
+    document.getElementById('sy-rmB').style.width=rp+'%';
+    document.getElementById('sy-dkB').style.width=dp+'%';
+    document.getElementById('sy-cpB').style.width=cp+'%';
+    document.getElementById('sy-pl').textContent=d.platform||'—';
+    document.getElementById('sy-ar').textContent=d.arch||'—';
+    document.getElementById('sy-cp').textContent=d.cpu||'—';
+    document.getElementById('sy-co').textContent=d.cores||'—';
+    document.getElementById('sy-hn').textContent=d.hostname||'—';
+    document.getElementById('sy-la').textContent=(d.loadavg||[]).map(v=>v.toFixed(2)).join(' / ')||'—';
+  }catch{}
+}
+
+// ════════════════════════════════
+// UTILS
+// ════════════════════════════════
+function fmtUp(ms){ const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),sc=s%60; if(d>0) return `${d}d ${h}h`; if(h>0) return `${h}h ${m}m`; return `${m}m ${sc}s`; }
+function fmtB(b){ if(!b) return '0B'; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024&&i<u.length-1){b/=1024;i++;} return b.toFixed(1)+u[i]; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function toast(msg,type='in'){
+  const c=document.getElementById('toast'); const el=document.createElement('div'); el.className='ti '+type;
+  const ic={ok:'fa-circle-check',er:'fa-circle-xmark',in:'fa-circle-info'};
+  const co={ok:'var(--grn)',er:'var(--red)',in:'var(--acc)'};
+  el.innerHTML=`<i class="fas ${ic[type]}" style="color:${co[type]}"></i>${esc(msg)}`;
+  c.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateX(100%)'; el.style.transition='all .3s'; setTimeout(()=>el.remove(),300); },3500);
+}
+</script>
+</body>
+</html>

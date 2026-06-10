@@ -4,142 +4,143 @@ const path = require("path");
 module.exports.config = {
     name: "setmode",
     aliases: ["mode"],
-    version: "1.0.0",
+    version: "1.1.0",
     permission: 0,
     prefix: true,
     author: "Adi.0X",
-    description: "Set who can use the bot in this group. Use --system to apply globally.",
+    description: "Set who can use the bot in this group.",
     category: "System",
-    usages: "[all/gcadmin/mod/admin] [--system]",
+    usages: "[all / gcadmin / mod / admin] [--system]",
     cooldowns: 3
 };
 
-// ── Level helpers (shared with handleCommand) ─────────────────────────────
 const MODE_LEVELS = { all: 0, gcadmin: 1, mod: 3, admin: 4 };
 const VALID_MODES = Object.keys(MODE_LEVELS);
 
 function getModeLevel(mode) { return MODE_LEVELS[mode] ?? 0; }
 
-function getUserModeLevel(userID, threadID) {
+function getUserLevel(userID, threadID) {
     const id = String(userID);
     if ((global.config.ADMINBOT || []).includes(id)) return 4;
     if ((global.config.mod       || []).includes(id)) return 3;
     const tInfo  = global.data.threadInfo.get(String(threadID)) || {};
     const admins = tInfo.adminIDs || [];
-    if (admins.some(a => String(a.id || a.uid) === id)) return 1;
+    if (admins.some(a => String(a.id || a) === id)) return 1;
     return 0;
 }
 
 const MODE_LABEL = {
-    all:     "🌐 All users (everyone)",
-    gcadmin: "👮 Group Admins, Mods, Bot Admins",
-    mod:     "🛡️ Mods & Bot Admins only",
-    admin:   "👑 Bot Admins only"
+    all:     "🌐 Everyone can use",
+    gcadmin: "👮 Group Admin, Mod & Bot Admin",
+    mod:     "🛡️ Only Mod & Bot Admin",
+    admin:   "👑 Only Bot Admin"
 };
 
 module.exports.run = async function ({ api, event, args, Threads, SystemConfig }) {
     const { threadID, messageID, senderID } = event;
 
+    // Refresh adminIDs — ensuring gcadmin mode works correctly
+    try {
+        const fresh = await api.getThreadInfo(threadID);
+        if (fresh && fresh.adminIDs) {
+            const existing = global.data.threadInfo.get(String(threadID)) || {};
+            global.data.threadInfo.set(String(threadID), { ...existing, adminIDs: fresh.adminIDs });
+        }
+    } catch {}
+
     const isSystemFlag  = args.includes("--system");
     const targetModeArg = args.find(a => a !== "--system")?.toLowerCase();
+    const userLevel     = getUserLevel(senderID, threadID);
 
-    const userLevel = getUserModeLevel(senderID, threadID);
-
-    // ══════════════════════════════════════════════════
-    //  STATUS — no target mode given
-    // ══════════════════════════════════════════════════
+    // ══ STATUS — Show current mode if no argument is provided ══
     if (!targetModeArg) {
         const threadSetting = global.data.threadData.get(String(threadID)) || {};
-        const groupMode   = threadSetting.groupMode  || "all";
-        const systemMode  = global.config.systemMode || "all";
-        const groupLevel  = getModeLevel(groupMode);
-        const systemLevel = getModeLevel(systemMode);
+        const groupMode     = threadSetting.groupMode  || "all";
+        const systemMode    = global.config.systemMode || "all";
+        const groupLevel    = getModeLevel(groupMode);
+        const systemLevel   = getModeLevel(systemMode);
+
+        const effectiveModeStr = systemLevel >= groupLevel ? systemMode : groupMode;
+        const effectiveLabel   = MODE_LABEL[effectiveModeStr];
 
         let msg = `⚙️ Mode Status:\n`;
+        msg += `  • Effective : ${effectiveModeStr} — ${effectiveLabel}\n`;
+
         if (systemLevel > groupLevel) {
-            // System mode is more restrictive — group setting has no effect
-            msg += `  • Effective : ${systemMode} — ${MODE_LABEL[systemMode]}\n`;
-            msg += `  (System-wide setting overrides this group)`;
+            msg += `  (System-wide setting is overriding this group's setting)`;
         } else if (groupLevel > systemLevel) {
-            // Group mode is more restrictive — both lines are relevant
-            msg += `  • This group  : ${groupMode} — ${MODE_LABEL[groupMode]}\n`;
-            msg += `  • System-wide : ${systemMode} — ${MODE_LABEL[systemMode]}`;
-        } else {
-            // Both are the same level
-            msg += `  • Effective : ${groupMode} — ${MODE_LABEL[groupMode]}`;
-            if (systemMode !== "all" || groupMode !== "all") {
-                msg += `\n  (Group and system are both set to "${groupMode}")`;
-            }
+            msg += `  • System-wide : ${systemMode} — ${MODE_LABEL[systemMode]}\n`;
+            msg += `  (The group's own mode is more restrictive)`;
         }
+
+        msg += `\n\n📋 Available Modes:\n`;
+        msg += `  all     → Everyone\n`;
+        msg += `  gcadmin → Group Admin+\n`;
+        msg += `  mod     → Mod+\n`;
+        msg += `  admin   → Only Bot Admin\n`;
+        msg += `\n💡 Usage: setmode gcadmin`;
+        if (userLevel >= 4) msg += `\n💡 System: setmode all --system`;
+
         return api.sendMessage(msg, threadID, messageID);
     }
 
+    // ══ Invalid mode check ══
     if (!VALID_MODES.includes(targetModeArg)) {
         return api.sendMessage(
-            `❌ Invalid mode. Valid: ${VALID_MODES.join(", ")}`,
+            `❌ Invalid mode! Valid modes are: ${VALID_MODES.join(", ")}`,
             threadID, messageID
         );
     }
 
     const targetLevel = getModeLevel(targetModeArg);
 
-    // ══════════════════════════════════════════════════
-    //  SYSTEM MODE — permission=4 only
-    // ══════════════════════════════════════════════════
+    // ══ SYSTEM MODE — Only Bot Admin can modify ══
     if (isSystemFlag) {
         if (userLevel < 4) {
-            return api.sendMessage("❌ Only Bot Admins can change the system-wide mode.", threadID, messageID);
+            return api.sendMessage("❌ System-wide mode can only be changed by a Bot Admin.", threadID, messageID);
         }
         await SystemConfig.setSetting("systemMode", targetModeArg);
+        global.config.systemMode = targetModeArg;
         return api.sendMessage(
-            `✅ System mode changed to "${targetModeArg}".\n${MODE_LABEL[targetModeArg]}\nApplied across the entire bot.`,
+            `✅ System mode → "${targetModeArg}"\n${MODE_LABEL[targetModeArg]}\n(Applied globally across the bot)`,
             threadID, messageID
         );
     }
 
-    // ══════════════════════════════════════════════════
-    //  GROUP MODE — permission checks based on current mode
-    // ══════════════════════════════════════════════════
-    const threadSetting  = global.data.threadData.get(String(threadID)) || {};
-    const currentMode    = threadSetting.groupMode || "all";
-    const currentLevel   = getModeLevel(currentMode);
+    // ══ GROUP MODE ══
+    // Rules:
+    // 1. Bot Admin (level 4) — Can set any mode
+    // 2. Group Admin / Mod (level 1-3) — Can lock up to their level and unlock
+    // 3. General user — Cannot perform changes
 
-    // User must be able to interact in this group (pass current mode gate)
-    if (userLevel < currentLevel) {
-        return; // silently ignore — mode gate already applies in handleCommand, but safety check here
+    if (userLevel < 1) {
+        return api.sendMessage(
+            "❌ Only Group Admins, Mods, or Bot Admins can change the mode.",
+            threadID, messageID
+        );
     }
 
-    // From "all" mode: user can lock up to their own level
-    // From locked mode: user can only UNLOCK (go to a less restrictive mode)
-    let allowed = false;
-    if (currentLevel === 0) {
-        // From "all": must have at least level 1 and target <= user level
-        allowed = userLevel >= 1 && targetLevel <= userLevel;
-    } else {
-        // From locked: can only go LOWER than current (unlock), user must meet current level
-        allowed = userLevel >= currentLevel && targetLevel < currentLevel;
+    // Target mode cannot be more restrictive than the user's own level
+    if (targetLevel > userLevel) {
+        const needed = targetModeArg === "admin" ? "Bot Admin"
+                     : targetModeArg === "mod"   ? "Mod or Bot Admin"
+                     : "Group Admin, Mod, or Bot Admin";
+        return api.sendMessage(
+            `❌ You must be a ${needed} to set "${targetModeArg}" mode.`,
+            threadID, messageID
+        );
     }
 
-    if (!allowed) {
-        let hint = "";
-        if (currentLevel === 0) {
-            hint = `You need to be ${targetLevel >= 3 ? "a Mod or Bot Admin" : targetLevel >= 1 ? "a Group Admin, Mod, or Bot Admin" : "a Bot Admin"} to lock the group to "${targetModeArg}".`;
-        } else {
-            const unlockable = VALID_MODES.filter(m => getModeLevel(m) < currentLevel).join(", ");
-            hint = `In "${currentMode}" mode you can only unlock to: ${unlockable || "none"}.`;
-        }
-        return api.sendMessage(`❌ Cannot change mode to "${targetModeArg}".\n${hint}`, threadID, messageID);
-    }
-
-    // Save to MongoDB Threads
+    // Save to MongoDB
     await Threads.setData(threadID, { "data.groupMode": targetModeArg });
 
-    // Update in-memory cache
+    // Update memory cache
+    const threadSetting = global.data.threadData.get(String(threadID)) || {};
     threadSetting.groupMode = targetModeArg;
     global.data.threadData.set(String(threadID), threadSetting);
 
     return api.sendMessage(
-        `✅ Group mode set to "${targetModeArg}".\n${MODE_LABEL[targetModeArg]}`,
+        `✅ This group's mode → "${targetModeArg}"\n${MODE_LABEL[targetModeArg]}`,
         threadID, messageID
     );
 };

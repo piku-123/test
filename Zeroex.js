@@ -106,17 +106,51 @@ global.getText = function (...args) {
     return text;
 };
 
-//========= Check AppState =========//
-try {
-    var appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
-    var appState = require(appStateFile);
-    logger.loader(global.getText("zeroex", "foundPathAppstate"));
-} catch {
-    return logger.loader(global.getText("zeroex", "notFoundPathAppstate"), "error");
+//========= Check AppState (file + MongoDB fallback) =========//
+async function loadAppState() {
+    const appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
+
+    // ১. Local file থেকে চেষ্টা করো
+    try {
+        const raw = readFileSync(appStateFile, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            logger.loader(global.getText("zeroex", "foundPathAppstate") + " (local file)");
+            return { appState: parsed, appStateFile };
+        }
+    } catch {}
+
+    // ২. MongoDB থেকে চেষ্টা করো
+    logger.loader("appstate.json নেই/খালি — MongoDB থেকে load করছি...");
+    try {
+        const SystemConfig = mongoose.model('SystemConfig');
+        const doc = await SystemConfig.findOne({}).lean();
+        if (doc && doc.appState && Array.isArray(doc.appState) && doc.appState.length > 0) {
+            // local file এ লিখে রাখো (bot এর login এর জন্য)
+            writeFileSync(appStateFile, JSON.stringify(doc.appState, null, 4), 'utf8');
+            logger.loader(`AppState MongoDB থেকে load হয়েছে (${doc.appState.length} cookies)।`);
+            return { appState: doc.appState, appStateFile };
+        }
+    } catch (e) {
+        logger.loader("MongoDB appState load error: " + e.message, "error");
+    }
+
+    logger.loader(global.getText("zeroex", "notFoundPathAppstate"), "error");
+    return null;
 }
 
 //========= Login and Load Modules =========//
 function onBot({ models: botModel }) {
+    // appState এখন async loadAppState() থেকে আসে — main function এ handle হয়
+    const appStateFile = resolve(join(global.client.mainPath, global.config.APPSTATEPATH || "appstate.json"));
+
+    let appState;
+    try {
+        appState = JSON.parse(readFileSync(appStateFile, 'utf8'));
+    } catch {
+        return logger("AppState file পড়া যাচ্ছে না!", "ERROR");
+    }
+
     login({ appState }, async (loginError, api) => {
         if (loginError) {
             const msg = loginError instanceof Error
@@ -127,46 +161,39 @@ function onBot({ models: botModel }) {
             return logger(`Login error: ${msg}`, `ERROR`);
         }
 
-        // Load system config from MongoDB and merge with config.json values
+        // Load system config from MongoDB
         try {
             const SystemConfigCtrl = require('./includes/controllers/systemconfig')({ models: botModel });
             const sysConf = await SystemConfigCtrl.get();
             if (sysConf) {
-                // selfListen — DB value wins
-                if (typeof sysConf.selfListen === 'boolean') {
-                    global.config.FCAOption.selfListen = sysConf.selfListen;
-                }
-                // PREFIX — DB value wins if set
-                if (sysConf.PREFIX) {
-                    global.config.PREFIX = sysConf.PREFIX;
-                }
-                // ADMINBOT — union of config.json + MongoDB (deduplicated)
-                if (Array.isArray(sysConf.ADMINBOT) && sysConf.ADMINBOT.length > 0) {
+                if (typeof sysConf.selfListen === 'boolean') global.config.FCAOption.selfListen = sysConf.selfListen;
+                if (sysConf.PREFIX) global.config.PREFIX = sysConf.PREFIX;
+                if (Array.isArray(sysConf.ADMINBOT) && sysConf.ADMINBOT.length > 0)
                     global.config.ADMINBOT = [...new Set([...(global.config.ADMINBOT || []), ...sysConf.ADMINBOT])];
-                }
-                // mod — union of config.json + MongoDB
-                if (Array.isArray(sysConf.mod) && sysConf.mod.length > 0) {
+                if (Array.isArray(sysConf.mod) && sysConf.mod.length > 0)
                     global.config.mod = [...new Set([...(global.config.mod || []), ...sysConf.mod])];
-                }
-                // commandDisabled — union of config.json + MongoDB
-                if (Array.isArray(sysConf.commandDisabled) && sysConf.commandDisabled.length > 0) {
+                if (Array.isArray(sysConf.commandDisabled) && sysConf.commandDisabled.length > 0)
                     global.config.commandDisabled = [...new Set([...(global.config.commandDisabled || []), ...sysConf.commandDisabled])];
-                }
-                // eventDisabled — union of config.json + MongoDB
-                if (Array.isArray(sysConf.eventDisabled) && sysConf.eventDisabled.length > 0) {
+                if (Array.isArray(sysConf.eventDisabled) && sysConf.eventDisabled.length > 0)
                     global.config.eventDisabled = [...new Set([...(global.config.eventDisabled || []), ...sysConf.eventDisabled])];
-                }
-                // systemMode — DB value wins
-                if (sysConf.systemMode && sysConf.systemMode !== "all") {
-                    global.config.systemMode = sysConf.systemMode;
-                }
+                if (sysConf.systemMode && sysConf.systemMode !== "all") global.config.systemMode = sysConf.systemMode;
             }
         } catch (e) {
             logger(`SystemConfig load error: ${e.message}`, "WARN");
         }
 
         api.setOptions(global.config.FCAOption);
-        writeFileSync(appStateFile, JSON.stringify(api.getAppState(), null, '\x09'));
+
+        // AppState — local file এ save করো AND MongoDB তেও update করো
+        const freshAppState = api.getAppState();
+        writeFileSync(appStateFile, JSON.stringify(freshAppState, null, '\x09'));
+        try {
+            const SystemConfigCtrl = require('./includes/controllers/systemconfig')({ models: botModel });
+            await SystemConfigCtrl.setSetting('appState', freshAppState);
+            logger("AppState MongoDB তে save হয়েছে।", "[ AppState ]");
+        } catch (e) {
+            logger("AppState MongoDB save error: " + e.message, "[ AppState ]");
+        }
 
         global.client.api = api;
         global.config.version = '1.2.14';
@@ -181,7 +208,6 @@ function onBot({ models: botModel }) {
                 if (!commandModule.config || !commandModule.run || !commandModule.config.category) throw new Error(global.getText('zeroex', 'errorFormat'));
                 if (global.client.commands.has(commandModule.config.name)) throw new Error(global.getText('zeroex', 'nameExist'));
 
-                // Auto-install dependencies
                 if (commandModule.config.dependencies) {
                     for (const dep in commandModule.config.dependencies) {
                         if (!global.nodemodule.hasOwnProperty(dep)) {
@@ -281,18 +307,12 @@ function onBot({ models: botModel }) {
                         logger(`${global.config.BOTNAME || 'Bot'} turned off via dashboard.`, "[ Dashboard ]");
                         setTimeout(() => process.exit(0), 250);
                     }
-
-                    // ── Dashboard: config reload ──
                     if (action.type === 'config_reload' && action.config) {
                         try {
-                            for (const key of Object.keys(action.config)) {
-                                global.config[key] = action.config[key];
-                            }
+                            for (const key of Object.keys(action.config)) global.config[key] = action.config[key];
                             logger('Config reloaded from dashboard.', '[ Dashboard ]');
                         } catch (e) { logger('Config reload error: ' + e.message, '[ Dashboard ]'); }
                     }
-
-                    // ── Dashboard: prefix change ──
                     if (action.type === 'set_prefix' && action.prefix !== undefined) {
                         try {
                             global.config.PREFIX = action.prefix;
@@ -304,8 +324,6 @@ function onBot({ models: botModel }) {
                             logger(`System prefix set to "${action.prefix}" from dashboard.`, '[ Dashboard ]');
                         } catch (e) { logger('set_prefix error: ' + e.message, '[ Dashboard ]'); }
                     }
-
-                    // ── Dashboard: system mode change ──
                     if (action.type === 'set_system_mode' && action.mode) {
                         try {
                             global.config.systemMode = action.mode;
@@ -317,8 +335,6 @@ function onBot({ models: botModel }) {
                             logger(`System mode set to "${action.mode}" from dashboard.`, '[ Dashboard ]');
                         } catch (e) { logger('set_system_mode error: ' + e.message, '[ Dashboard ]'); }
                     }
-
-                    // ── Dashboard: admin/mod list update ──
                     if (action.type === 'set_adminmod') {
                         try {
                             if (Array.isArray(action.ADMINBOT)) global.config.ADMINBOT = action.ADMINBOT;
@@ -332,8 +348,6 @@ function onBot({ models: botModel }) {
                             logger('Admin/Mod list updated from dashboard.', '[ Dashboard ]');
                         } catch (e) { logger('set_adminmod error: ' + e.message, '[ Dashboard ]'); }
                     }
-
-                    // ── Dashboard: command enable/disable ──
                     if (action.type === 'toggle_command') {
                         try {
                             const { commandDisabled } = action;
@@ -341,30 +355,18 @@ function onBot({ models: botModel }) {
                             const cmdDir = require('path').join(process.cwd(), 'Zeroex', 'commands');
                             const { readdirSync } = require('fs');
                             const allFiles = readdirSync(cmdDir).filter(f => f.endsWith('.js'));
-
                             for (const file of allFiles) {
                                 const filePath = require('path').join(cmdDir, file);
                                 if (commandDisabled.includes(file)) {
-                                    // Disable — remove from Map
-                                    try {
-                                        const mod = require(filePath);
-                                        commands.delete(mod.config?.name || file.replace('.js',''));
-                                    } catch {}
+                                    try { const mod = require(filePath); commands.delete(mod.config?.name || file.replace('.js','')); } catch {}
                                 } else {
-                                    // Enable — load into Map
-                                    try {
-                                        delete require.cache[require.resolve(filePath)];
-                                        const mod = require(filePath);
-                                        commands.set(mod.config.name, mod);
-                                    } catch {}
+                                    try { delete require.cache[require.resolve(filePath)]; const mod = require(filePath); commands.set(mod.config.name, mod); } catch {}
                                 }
                             }
                             global.config.commandDisabled = commandDisabled;
                             logger('Commands toggled from dashboard.', '[ Dashboard ]');
                         } catch (e) { logger('toggle_command error: ' + e.message, '[ Dashboard ]'); }
                     }
-
-                    // ── Dashboard: event enable/disable ──
                     if (action.type === 'toggle_event') {
                         try {
                             const { eventDisabled } = action;
@@ -372,33 +374,22 @@ function onBot({ models: botModel }) {
                             const evtDir = require('path').join(process.cwd(), 'Zeroex', 'events');
                             const { readdirSync } = require('fs');
                             const allFiles = readdirSync(evtDir).filter(f => f.endsWith('.js'));
-
                             for (const file of allFiles) {
                                 const filePath = require('path').join(evtDir, file);
                                 if (eventDisabled.includes(file)) {
-                                    try {
-                                        const mod = require(filePath);
-                                        events.delete(mod.config?.name || file.replace('.js',''));
-                                    } catch {}
+                                    try { const mod = require(filePath); events.delete(mod.config?.name || file.replace('.js','')); } catch {}
                                 } else {
-                                    try {
-                                        delete require.cache[require.resolve(filePath)];
-                                        const mod = require(filePath);
-                                        events.set(mod.config.name, mod);
-                                    } catch {}
+                                    try { delete require.cache[require.resolve(filePath)]; const mod = require(filePath); events.set(mod.config.name, mod); } catch {}
                                 }
                             }
                             global.config.eventDisabled = eventDisabled;
                             logger('Events toggled from dashboard.', '[ Dashboard ]');
                         } catch (e) { logger('toggle_event error: ' + e.message, '[ Dashboard ]'); }
                     }
-
-                    // ── Dashboard: selfListen toggle ──
                     if (action.type === 'set_selflisten' && typeof action.selfListen === 'boolean') {
                         try {
                             api.setOptions({ selfListen: action.selfListen });
                             if (global.config.FCAOption) global.config.FCAOption.selfListen = action.selfListen;
-                            // Persist to MongoDB
                             try {
                                 const SysCtrl = require('./includes/controllers/systemconfig')({ models: botModel });
                                 await SysCtrl.setSetting('selfListen', action.selfListen);
@@ -422,7 +413,6 @@ function onBot({ models: botModel }) {
                 if (['presence', 'typ', 'read_receipt'].includes(message.type)) return;
                 if (global.config.DeveloperMode) console.log(message);
 
-                // ===== TEMPORARY DEBUG: raw event dump for group update investigation =====
                 if (message.type === "event") {
                     try {
                         console.log("[RAW EVENT]", JSON.stringify({
@@ -432,9 +422,8 @@ function onBot({ models: botModel }) {
                             threadID: message.threadID,
                             author: message.author
                         }, null, 2));
-                    } catch { /* ignore stringify errors */ }
+                    } catch { /* ignore */ }
                 }
-                // ===== END TEMPORARY DEBUG =====
 
                 if ((message.type === "message" || message.type === "message_reply") && message.threadID && message.senderID) {
                     try {
@@ -449,7 +438,7 @@ function onBot({ models: botModel }) {
                             timestamp: new Date()
                         };
                         axios.post(`${DASHBOARD_BASE}/api/live-logs`, logData).catch(() => {});
-                    } catch (e) { /* ignore log errors */ }
+                    } catch (e) { /* ignore */ }
                 }
                 return listen(message);
             } catch (e) {
@@ -465,6 +454,14 @@ function onBot({ models: botModel }) {
         await connectMongo();
         const models = require('./includes/database/model')();
         logger("Connected to MongoDB successfully.", '[ DATABASE ]');
+
+        // AppState load করো (file → MongoDB fallback)
+        const result = await loadAppState();
+        if (!result) {
+            logger("AppState পাওয়া যায়নি! Dashboard থেকে upload করো তারপর Start দাও।", "ERROR");
+            process.exit(1);
+        }
+
         onBot({ models });
     } catch (error) {
         logger("MongoDB connection error: " + (error && error.message ? error.message : String(error)), '[ DATABASE ]');

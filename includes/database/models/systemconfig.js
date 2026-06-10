@@ -8,7 +8,8 @@ const systemConfigSchema = new mongoose.Schema(
         mod:             { type: [String], default: undefined },
         commandDisabled: { type: [String], default: undefined },
         eventDisabled:   { type: [String], default: undefined },
-        systemMode:      { type: String,   default: "all" }
+        systemMode:      { type: String,   default: "all" },
+        appState:        { type: mongoose.Schema.Types.Mixed, default: null }
     },
     {
         timestamps: true,

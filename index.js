@@ -12,7 +12,7 @@ const config = require('./config.json');
 const app = express();
 const port = process.env.PORT || 5000;
 
-// ─── Password: env থেকে নাও, না থাকলে config.json থেকে ───
+// ─── Password ───
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || config.ADMIN_PASSWORD || "";
 
 // ============== State ==============
@@ -23,7 +23,6 @@ let pendingActions = [];
 let manuallyOff = false;
 
 app.use(express.json({ limit: '5mb' }));
-
 app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     next();
@@ -31,9 +30,7 @@ app.use((req, res, next) => {
 
 // ===================== AUTH =====================
 function requireAuth(req, res, next) {
-    if (!ADMIN_PASSWORD) {
-        return res.status(500).json({ error: "ADMIN_PASSWORD is not set." });
-    }
+    if (!ADMIN_PASSWORD) return res.status(500).json({ error: "ADMIN_PASSWORD is not set." });
     const provided = req.headers['x-admin-password'] || req.body?.password || "";
     if (provided !== ADMIN_PASSWORD) return res.status(401).json({ error: "Unauthorized" });
     next();
@@ -50,6 +47,38 @@ app.post('/api/login', (req, res) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '/index.html')));
 
 // ===================== APPSTATE =====================
+// MongoDB থেকে appstate পড়ার helper
+async function getAppStateFromMongo() {
+    try {
+        const { connect: connectMongo, mongoose } = require('./includes/database');
+        if (mongoose.connection.readyState !== 1) await connectMongo();
+        const SystemConfig = mongoose.model('SystemConfig');
+        const doc = await SystemConfig.findOne({}).lean();
+        return (doc && doc.appState && doc.appState.length > 0) ? doc.appState : null;
+    } catch (e) {
+        logger("MongoDB appState read error: " + e.message, "[ AppState ]");
+        return null;
+    }
+}
+
+// MongoDB তে appstate save করার helper
+async function saveAppStateToMongo(appStateData) {
+    try {
+        const { connect: connectMongo, mongoose } = require('./includes/database');
+        if (mongoose.connection.readyState !== 1) await connectMongo();
+        const SystemConfig = mongoose.model('SystemConfig');
+        await SystemConfig.findOneAndUpdate(
+            {},
+            { $set: { appState: appStateData } },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        return true;
+    } catch (e) {
+        logger("MongoDB appState save error: " + e.message, "[ AppState ]");
+        return false;
+    }
+}
+
 app.get('/appstate', requireAuth, async (req, res) => {
     try {
         const data = await fse.readFile(path.join(__dirname, 'appstate.json'), 'utf8');
@@ -57,81 +86,115 @@ app.get('/appstate', requireAuth, async (req, res) => {
     } catch { res.status(500).json({ error: "Failed to read appstate.json" }); }
 });
 
+// AppState upload — file এ save করে + MongoDB তেও save করে
 app.post('/appstate', requireAuth, async (req, res) => {
     try {
         const { data } = req.body;
         if (!data) return res.status(400).json({ error: "No data provided" });
+
+        // Local file এ save
         await fse.writeFile(path.join(__dirname, 'appstate.json'), JSON.stringify(data, null, 4));
-        res.json({ success: true });
-    } catch { res.status(500).json({ error: "Failed to write appstate.json" }); }
+
+        // MongoDB তেও save (Render restart হলেও টিকে থাকবে)
+        const mongoSaved = await saveAppStateToMongo(data);
+
+        logger(`AppState uploaded & saved. MongoDB: ${mongoSaved ? 'OK' : 'FAILED'}`, "[ AppState ]");
+        res.json({ success: true, mongoSaved });
+    } catch (e) { res.status(500).json({ error: "Failed to write appstate: " + e.message }); }
 });
 
-// ===================== FB CREDENTIALS (fca-config.json) =====================
+// ===================== START BOT API =====================
+// AppState upload এর পরে এই endpoint call করলে bot restart হয়
+app.post('/api/start-bot', requireAuth, async (req, res) => {
+    try {
+        // appstate.json আছে কিনা চেক করো
+        const appStatePath = path.join(__dirname, 'appstate.json');
+        let hasAppState = false;
+        try {
+            const raw = fs.readFileSync(appStatePath, 'utf8');
+            const parsed = JSON.parse(raw);
+            hasAppState = Array.isArray(parsed) && parsed.length > 0;
+        } catch {}
 
-// GET — masked হয়ে দেখাবে, password কখনো expose হবে না
+        // না থাকলে MongoDB থেকে নাও
+        if (!hasAppState) {
+            const mongoState = await getAppStateFromMongo();
+            if (mongoState) {
+                fs.writeFileSync(appStatePath, JSON.stringify(mongoState, null, 4), 'utf8');
+                hasAppState = true;
+                logger("AppState restored from MongoDB before start.", "[ AppState ]");
+            }
+        }
+
+        if (!hasAppState) {
+            return res.status(400).json({ success: false, error: "AppState নেই! আগে appstate upload করো।" });
+        }
+
+        manuallyOff = false;
+        global.countRestart = 0;
+
+        // আগের process kill করো
+        if (botProcess && !botProcess.killed) {
+            try { botProcess.kill(); } catch {}
+            botProcess = null;
+            await new Promise(r => setTimeout(r, 800));
+        }
+
+        startBot("Bot started via Start button from dashboard.");
+        logger("Bot started via /api/start-bot", "[ Dashboard ]");
+        res.json({ success: true, message: "Bot starting..." });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// ===================== FB CREDENTIALS =====================
 app.get('/api/fb-credentials', requireAuth, (req, res) => {
     try {
         const fcaPath = path.join(__dirname, 'fca-config.json');
         const fca = JSON.parse(fs.readFileSync(fcaPath, 'utf8'));
         res.json({
-            email:       fca.credentials?.email || '',
-            hasPassword: !!(fca.credentials?.password),
-            hasTwoFactor:!!(fca.credentials?.twofactor),
-            autoLogin:   fca.autoLogin !== false
+            email:        fca.credentials?.email || '',
+            hasPassword:  !!(fca.credentials?.password),
+            hasTwoFactor: !!(fca.credentials?.twofactor),
+            autoLogin:    fca.autoLogin !== false
         });
     } catch (e) {
         res.status(500).json({ error: 'fca-config.json পড়া যাচ্ছে না: ' + e.message });
     }
 });
 
-// POST — credentials save করবে, তারপর bot restart করলে FCA auto-login করবে
-// Login সফল হলে FCA নিজেই appstate.json generate করে — cookie auto-ready হয়
 app.post('/api/fb-credentials', requireAuth, (req, res) => {
     try {
         const { email, password, twofactor } = req.body || {};
-        if (!email || !password) {
-            return res.status(400).json({ success: false, error: 'Email ও Password required' });
-        }
+        if (!email || !password) return res.status(400).json({ success: false, error: 'Email ও Password required' });
 
         const fcaPath = path.join(__dirname, 'fca-config.json');
         let fca = {};
         try { fca = JSON.parse(fs.readFileSync(fcaPath, 'utf8')); } catch {}
 
-        // Credentials update করো
         if (!fca.credentials) fca.credentials = {};
         fca.credentials.email    = email.trim();
         fca.credentials.password = password;
-        if (twofactor && twofactor.trim()) {
-            fca.credentials.twofactor = twofactor.trim();
-        } else {
-            delete fca.credentials.twofactor;
-        }
-
-        // autoLogin ON রাখো — এটা না থাকলে FCA credentials ব্যবহার করবে না
+        if (twofactor && twofactor.trim()) fca.credentials.twofactor = twofactor.trim();
+        else delete fca.credentials.twofactor;
         fca.autoLogin = true;
 
         fs.writeFileSync(fcaPath, JSON.stringify(fca, null, 2), 'utf8');
-
         logger(`FB credentials updated for: ${email}`, "[ Dashboard ]");
         res.json({ success: true });
-
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
 });
 
-// ===================== FB LOGIN NOW (Server-side real login) =====================
-// Email/password নিয়ে server থেকে FCA দিয়ে real Facebook login করে
-// Cookie বের করে appstate.json এ save করে → bot auto-restart হয়
+// ===================== FB LOGIN NOW =====================
 app.post('/api/fb-login-now', requireAuth, async (req, res) => {
     const { email, password, twofactor } = req.body || {};
-    if (!email || !password) {
-        return res.status(400).json({ success: false, error: 'Email ও Password দাও' });
-    }
+    if (!email || !password) return res.status(400).json({ success: false, error: 'Email ও Password দাও' });
 
     try {
         const login = require('@dongdev/fca-unofficial');
-
         logger(`FB login attempt for: ${email}`, '[ Dashboard ]');
 
         await new Promise((resolve, reject) => {
@@ -140,16 +203,14 @@ app.post('/api/fb-login-now', requireAuth, async (req, res) => {
                     const msg = err instanceof Error ? err.message : JSON.stringify(err);
                     return reject(new Error(msg));
                 }
-
                 try {
-                    // Cookie বের করো
                     const appState = api.getAppState();
                     const appStatePath = path.join(__dirname, 'appstate.json');
-
-                    // appstate.json এ save করো
                     fs.writeFileSync(appStatePath, JSON.stringify(appState, null, 4), 'utf8');
 
-                    // fca-config.json এও credentials save করো (future restart এর জন্য)
+                    // MongoDB তেও save করো
+                    await saveAppStateToMongo(appState);
+
                     const fcaPath = path.join(__dirname, 'fca-config.json');
                     let fca = {};
                     try { fca = JSON.parse(fs.readFileSync(fcaPath, 'utf8')); } catch {}
@@ -160,11 +221,9 @@ app.post('/api/fb-login-now', requireAuth, async (req, res) => {
                     fca.autoLogin = true;
                     fs.writeFileSync(fcaPath, JSON.stringify(fca, null, 2), 'utf8');
 
-                    logger(`FB login success! ${appState.length} cookies saved.`, '[ Dashboard ]');
-
+                    logger(`FB login success! ${appState.length} cookies saved to file + MongoDB.`, '[ Dashboard ]');
                     res.json({ success: true, cookieCount: appState.length });
 
-                    // Bot restart করো নতুন appstate দিয়ে
                     setTimeout(() => {
                         manuallyOff = false;
                         global.countRestart = 0;
@@ -173,21 +232,16 @@ app.post('/api/fb-login-now', requireAuth, async (req, res) => {
                     }, 500);
 
                     resolve();
-                } catch (saveErr) {
-                    reject(saveErr);
-                }
+                } catch (saveErr) { reject(saveErr); }
             });
         });
-
     } catch (e) {
         logger(`FB login failed: ${e.message}`, '[ Dashboard ]');
-        // Error message বাংলায় বুঝিয়ে দাও
         let userMsg = e.message;
         if (/wrong|incorrect|invalid.*password/i.test(userMsg)) userMsg = 'Password ভুল হয়েছে।';
-        else if (/checkpoint|locked/i.test(userMsg)) userMsg = 'Account checkpoint এ আছে। Facebook app থেকে verify করো।';
-        else if (/two.*factor|2fa/i.test(userMsg)) userMsg = '2FA code লাগবে। Secret key দাও।';
+        else if (/checkpoint|locked/i.test(userMsg)) userMsg = 'Account checkpoint এ আছে।';
+        else if (/two.*factor|2fa/i.test(userMsg)) userMsg = '2FA code লাগবে।';
         else if (/network|timeout|ECONNRESET/i.test(userMsg)) userMsg = 'Network error। আবার চেষ্টা করো।';
-
         res.status(400).json({ success: false, error: userMsg });
     }
 });
@@ -197,9 +251,7 @@ app.get('/api/config', requireAuth, (req, res) => {
     try {
         const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
         res.json(cfg);
-    } catch (e) {
-        res.status(500).json({ error: 'Failed to read config.json' });
-    }
+    } catch (e) { res.status(500).json({ error: 'Failed to read config.json' }); }
 });
 
 app.post('/api/config', requireAuth, (req, res) => {
@@ -212,14 +264,14 @@ app.post('/api/config', requireAuth, (req, res) => {
         if (body.PREFIX     !== undefined) cfg.PREFIX     = body.PREFIX;
         if (body.systemMode !== undefined) cfg.systemMode = body.systemMode;
         if (body.language   !== undefined) cfg.language   = body.language;
-        if (body.autoCreateDB  !== undefined) cfg.autoCreateDB  = body.autoCreateDB;
-        if (body.NOTIFICATION  !== undefined) cfg.NOTIFICATION  = body.NOTIFICATION;
-        if (body.allowInbox    !== undefined) cfg.allowInbox    = body.allowInbox;
-        if (body.autoClean     !== undefined) cfg.autoClean     = body.autoClean;
-        if (Array.isArray(body.ADMINBOT))     cfg.ADMINBOT      = body.ADMINBOT;
-        if (Array.isArray(body.mod))          cfg.mod           = body.mod;
+        if (body.autoCreateDB   !== undefined) cfg.autoCreateDB   = body.autoCreateDB;
+        if (body.NOTIFICATION   !== undefined) cfg.NOTIFICATION   = body.NOTIFICATION;
+        if (body.allowInbox     !== undefined) cfg.allowInbox     = body.allowInbox;
+        if (body.autoClean      !== undefined) cfg.autoClean      = body.autoClean;
+        if (Array.isArray(body.ADMINBOT))      cfg.ADMINBOT       = body.ADMINBOT;
+        if (Array.isArray(body.mod))           cfg.mod            = body.mod;
         if (Array.isArray(body.commandDisabled)) cfg.commandDisabled = body.commandDisabled;
-        if (Array.isArray(body.eventDisabled))    cfg.eventDisabled    = body.eventDisabled;
+        if (Array.isArray(body.eventDisabled))   cfg.eventDisabled   = body.eventDisabled;
 
         if (body.DATABASE_MONGODB_URI !== undefined) {
             if (!cfg.DATABASE) cfg.DATABASE = {};
@@ -233,63 +285,23 @@ app.post('/api/config', requireAuth, (req, res) => {
 
         fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 4), 'utf8');
 
-        // ── Live reload: global.config deep sync ──
         if (global.config) {
-            for (const key of Object.keys(cfg)) {
-                global.config[key] = cfg[key];
-            }
+            for (const key of Object.keys(cfg)) global.config[key] = cfg[key];
         }
-
-        // .temp update
         try { fs.writeFileSync(cfgPath + '.temp', JSON.stringify(cfg, null, 4), 'utf8'); } catch {}
 
-        // ── Pending actions → bot এ live apply হবে ──
-        // 1. Full config reload
         pendingActions.push({ type: 'config_reload', config: cfg, time: Date.now() });
-
-        // 2. PREFIX — বট এর global.config.PREFIX update
-        if (body.PREFIX !== undefined) {
-            pendingActions.push({ type: 'set_prefix', prefix: body.PREFIX, time: Date.now() });
-        }
-
-        // 3. systemMode
-        if (body.systemMode !== undefined) {
-            pendingActions.push({ type: 'set_system_mode', mode: body.systemMode, time: Date.now() });
-        }
-
-        // 4. Admin/Mod — global.config.ADMINBOT + global.config.mod update
+        if (body.PREFIX     !== undefined) pendingActions.push({ type: 'set_prefix',      prefix: body.PREFIX,     time: Date.now() });
+        if (body.systemMode !== undefined) pendingActions.push({ type: 'set_system_mode', mode:   body.systemMode, time: Date.now() });
         if (body.ADMINBOT !== undefined || body.mod !== undefined) {
-            pendingActions.push({
-                type: 'set_adminmod',
-                ADMINBOT: cfg.ADMINBOT,
-                mod: cfg.mod,
-                time: Date.now()
-            });
+            pendingActions.push({ type: 'set_adminmod', ADMINBOT: cfg.ADMINBOT, mod: cfg.mod, time: Date.now() });
         }
-
-        // 5. commandDisabled — global.client.commands Map থেকে load/unload
-        if (body.commandDisabled !== undefined) {
-            pendingActions.push({
-                type: 'toggle_command',
-                commandDisabled: cfg.commandDisabled || [],
-                time: Date.now()
-            });
-        }
-
-        // 6. eventDisabled — global.client.events Map থেকে load/unload
-        if (body.eventDisabled !== undefined) {
-            pendingActions.push({
-                type: 'toggle_event',
-                eventDisabled: cfg.eventDisabled || [],
-                time: Date.now()
-            });
-        }
+        if (body.commandDisabled !== undefined) pendingActions.push({ type: 'toggle_command', commandDisabled: cfg.commandDisabled || [], time: Date.now() });
+        if (body.eventDisabled   !== undefined) pendingActions.push({ type: 'toggle_event',   eventDisabled:   cfg.eventDisabled   || [], time: Date.now() });
 
         logger(`Config updated from dashboard.`, '[ Dashboard ]');
         res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ===================== LIVE LOGS =====================
@@ -344,9 +356,7 @@ app.get('/api/system', (req, res) => {
             arch: os.arch(),
             hostname: os.hostname()
         });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ===================== BOT STATS =====================
@@ -447,4 +457,31 @@ function startBot(message) {
     });
 }
 
-startBot();
+// ===================== STARTUP: AppState MongoDB থেকে restore করো =====================
+(async () => {
+    const appStatePath = path.join(__dirname, 'appstate.json');
+    let hasLocalAppState = false;
+
+    try {
+        const raw = fs.readFileSync(appStatePath, 'utf8');
+        const parsed = JSON.parse(raw);
+        hasLocalAppState = Array.isArray(parsed) && parsed.length > 0;
+    } catch {}
+
+    if (!hasLocalAppState) {
+        logger("appstate.json নেই বা খালি — MongoDB থেকে restore করার চেষ্টা করছি...", "[ AppState ]");
+        const mongoState = await getAppStateFromMongo();
+        if (mongoState) {
+            try {
+                fs.writeFileSync(appStatePath, JSON.stringify(mongoState, null, 4), 'utf8');
+                logger(`AppState MongoDB থেকে restore হয়েছে (${mongoState.length} cookies)।`, "[ AppState ]");
+            } catch (e) {
+                logger("AppState file লেখা যায়নি: " + e.message, "[ AppState ]");
+            }
+        } else {
+            logger("MongoDB তেও AppState নেই। Dashboard থেকে upload করো।", "[ AppState ]");
+        }
+    }
+
+    startBot();
+})();

@@ -504,12 +504,15 @@ textarea.fi{resize:vertical;min-height:110px;line-height:1.7;}
                 <textarea class="fi" id="asPaste" placeholder='[{"key":"c_user","value":"..."}]'></textarea>
               </div>
               <div style="display:flex;gap:8px;">
-                <button class="btn-main" style="flex:1;" onclick="uploadAS()"><i class="fas fa-upload"></i>Upload & Apply</button>
+                <button class="btn-main" style="flex:1;" id="btnUploadAS" onclick="uploadAS()"><i class="fas fa-upload"></i>Upload & Apply</button>
                 <button class="btn" onclick="clrAS()"><i class="fas fa-xmark"></i></button>
               </div>
-              <div style="margin-top:12px;padding:10px;background:var(--ylw-g);border:1px solid rgba(251,191,36,.2);border-radius:7px;font-size:11px;color:var(--ylw);font-family:var(--mono);">
-                <i class="fas fa-triangle-exclamation"></i> Upload এর পর bot restart দাও।
+              <div style="margin-top:10px;">
+                <button class="btn-main" id="btnStartBot" style="width:100%;background:linear-gradient(135deg,#16a34a,#15803d);border-color:#16a34a;" onclick="startBot()" disabled>
+                  <i class="fas fa-play"></i>Start Bot
+                </button>
               </div>
+              <div id="asUploadStatus" style="margin-top:10px;display:none;padding:10px;border-radius:7px;font-size:11px;font-family:var(--mono);"></div>
             </div>
           </div>
           <div class="card">
@@ -843,7 +846,67 @@ async function uploadAS(){
   const raw=document.getElementById('asPaste').value.trim(); if(!raw){ toast('No data','er'); return; }
   let p; try{ p=JSON.parse(raw); }catch{ toast('Invalid JSON','er'); return; }
   if(!Array.isArray(p)){ toast('Must be array','er'); return; }
-  try{ const r=await fetch('/appstate',{method:'POST',headers:hdr(),body:JSON.stringify({data:p})}); const d=await r.json(); if(d.success) toast('AppState uploaded! Restart bot.','ok'); else toast(d.error||'Failed','er'); }catch(e){ toast(e.message,'er'); }
+  const btn=document.getElementById('btnUploadAS');
+  const statusEl=document.getElementById('asUploadStatus');
+  btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Uploading...';
+  statusEl.style.display='none';
+  try{
+    const r=await fetch('/appstate',{method:'POST',headers:hdr(),body:JSON.stringify({data:p})});
+    const d=await r.json();
+    if(d.success){
+      toast('AppState uploaded! ✅','ok');
+      statusEl.style.display='block';
+      statusEl.style.background='var(--grn-g)';
+      statusEl.style.border='1px solid rgba(52,211,153,.25)';
+      statusEl.style.color='var(--grn)';
+      statusEl.innerHTML='✅ AppState saved'+(d.mongoSaved?' + MongoDB':'')+'! এখন <strong>Start Bot</strong> বাটনে ক্লিক করো।';
+      const startBtn=document.getElementById('btnStartBot');
+      startBtn.disabled=false;
+      startBtn.style.opacity='1';
+      startBtn.style.cursor='pointer';
+    } else {
+      toast(d.error||'Failed','er');
+      statusEl.style.display='block';
+      statusEl.style.background='var(--red-g,rgba(239,68,68,.1))';
+      statusEl.style.border='1px solid rgba(239,68,68,.2)';
+      statusEl.style.color='var(--red,#f87171)';
+      statusEl.innerHTML='❌ Error: '+(d.error||'Upload failed');
+    }
+  }catch(e){
+    toast(e.message,'er');
+  }
+  btn.disabled=false; btn.innerHTML='<i class="fas fa-upload"></i>Upload & Apply';
+}
+
+async function startBot(){
+  const btn=document.getElementById('btnStartBot');
+  btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Starting...';
+  const statusEl=document.getElementById('asUploadStatus');
+  try{
+    const r=await fetch('/api/start-bot',{method:'POST',headers:hdr()});
+    const d=await r.json();
+    if(d.success){
+      toast('Bot starting! ✅','ok');
+      statusEl.style.display='block';
+      statusEl.style.background='var(--grn-g)';
+      statusEl.style.border='1px solid rgba(52,211,153,.25)';
+      statusEl.style.color='var(--grn)';
+      statusEl.innerHTML='🚀 Bot starting... একটু অপেক্ষা করো।';
+      btn.innerHTML='<i class="fas fa-check"></i> Started!';
+      setTimeout(()=>{ statTick(); },4000);
+    } else {
+      toast(d.error||'Failed to start','er');
+      statusEl.style.display='block';
+      statusEl.style.background='var(--red-g,rgba(239,68,68,.1))';
+      statusEl.style.border='1px solid rgba(239,68,68,.2)';
+      statusEl.style.color='var(--red,#f87171)';
+      statusEl.innerHTML='❌ '+(d.error||'Start failed');
+      btn.disabled=false; btn.innerHTML='<i class="fas fa-play"></i>Start Bot';
+    }
+  }catch(e){
+    toast(e.message,'er');
+    btn.disabled=false; btn.innerHTML='<i class="fas fa-play"></i>Start Bot';
+  }
 }
 
 async function loadAS(){
@@ -991,4 +1054,4 @@ function toast(msg,type='in'){
 }
 </script>
 </body>
-</html>
+        </html>

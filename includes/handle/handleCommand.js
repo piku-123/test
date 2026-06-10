@@ -94,18 +94,14 @@ module.exports = function ({ api, models, Users, Threads, Currencies, Settings, 
       }
     }
 
-    // --- adminIDs রিফ্রেশ — খালি থাকলে API থেকে আনা হয় (gcadmin mode fix) ---
+    // --- adminIDs রিফ্রেশ — সবসময় fresh নাও যাতে gcadmin mode সঠিক কাজ করে ---
     {
         const _ti = threadInfo.get(threadID) || {};
-        if (!_ti.adminIDs || _ti.adminIDs.length === 0) {
-            try {
-                const _fresh = await api.getThreadInfo(threadID);
-                const _admins = _fresh.adminIDs || [];
-                if (_admins.length > 0) {
-                    threadInfo.set(threadID, { ..._ti, adminIDs: _admins });
-                }
-            } catch {}
-        }
+        try {
+            const _fresh = await api.getThreadInfo(threadID);
+            const _admins = _fresh.adminIDs || [];
+            threadInfo.set(threadID, { ..._ti, adminIDs: _admins });
+        } catch {}
     }
 
     // --- Mode Gate — কে বট ব্যবহার করতে পারবে এই গ্রুপে ---

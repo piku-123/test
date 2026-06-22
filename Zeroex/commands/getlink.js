@@ -2,11 +2,10 @@ module.exports.config = {
   name: "getlink",
   version: "1.0.0",
   permission: 0,
-  credits: "Adi.0X",
-  description: "Get direct download link of any replied media",
-  commandCategory: "Tools",
-  usages: "reply to any media",
-  cooldowns: 5
+  author: "Adi.0X",
+  category: "Tools",
+  cooldowns: 5,
+  description: "Get direct download link of any replied media"
 };
 
 module.exports.run = async function ({ api, event }) {

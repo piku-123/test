@@ -178,7 +178,7 @@ try {
     let msg = `┏ SOUNDBOARD
 ┃ • Search: ${keyword}
 ┃ • Results: ${limitedResults.length}
-┣━━━━━━━━━━━━━━━━━━━━━`;
+┣━━━━━━━━━━━━━━━━━━━━━\n`;
 
     limitedResults.forEach((item, i) => {
         let displayName = item.name;
@@ -191,7 +191,6 @@ try {
     });
 
     msg += `┣━━━━━━━━━━━━━━━━━━━━━
-
 ┃ Reply with a number
 ┗━━━━━━━━━━━━━━━━━━━━━`;
 

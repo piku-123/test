@@ -57,13 +57,13 @@ async function sendAudio(api, event, url, name, listMessageID, userMessageID) {
 
         // Update list message status if it exists
         if (listMessageID) {
-            await api.editMessage(`┃ ▶ Now Playing: ${name}`, listMessageID);
+            await api.editMessage(`▶ Playing: ${name}`, listMessageID);
         }
 
         // Send audio attachment
         await new Promise((resolve, reject) => {
             api.sendMessage({
-                body: `┏━━━━━━━━━━━━━━━━━━━━\n┃ 🔊 NOW PLAYING\n┃\n┃ ${wrapText(name, 25)}\n┗━━━━━━━━━━━━━━━━━━━━`,
+                body: `${name}`,
                 attachment: fs.createReadStream(cachePath)
             }, threadID, (err) => {
                 if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);

@@ -16,6 +16,7 @@ module.exports.config = {
     cooldowns: 3
 };
 
+
 const UNAVAILABLE_TYPES = ["UnavailableMessagingActor", "ReducedMessagingActor"];
 
 const FILTER_ALIASES = {
@@ -62,8 +63,7 @@ module.exports.run = async function ({ api, event, args, models }) {
 
     if (!isBotAdmin(threadInfo, botID)) {
         return api.sendMessage(
-            "❌ I'm not an admin in this group, so I can't kick anyone.\n" +
-            "Please make the bot a group admin first, then try again.",
+            "I'm not a group admin.",
             threadID, messageID
         );
     }
@@ -170,45 +170,61 @@ module.exports.run = async function ({ api, event, args, models }) {
         }, messageID);
     }
 
-    let targetUID = null;
+    let targetUIDs = [];
 
     if (Object.keys(mentions).length > 0) {
-        targetUID = Object.keys(mentions)[0];
+        targetUIDs = [...new Set(Object.keys(mentions))];
     } else if (messageReply) {
-        targetUID = messageReply.senderID;
+        targetUIDs = [messageReply.senderID];
     } else {
         return api.sendMessage(
-            "❌ Usage:\n• Mention someone: kick @name\n• Reply to their message: kick\n• Bulk kick: kick -f daily/monthly/total <N> | kick -f user",
+            "❌ Usage:\n• Mention someone: kick @name (multiple mentions supported)\n• Reply to their message: kick\n• Bulk kick: kick -f daily/monthly/total <N> | kick -f user",
             threadID, messageID
         );
     }
 
-    if (targetUID === senderID) {
-        return api.sendMessage("❌ You can't kick yourself.", threadID, messageID);
+    const invalid = [];
+    const validTargets = [];
+    for (const uid of targetUIDs) {
+        if (uid === senderID) {
+            invalid.push(`${nameOf(uid)} — you can't kick yourself`);
+        } else if (uid === botID) {
+            invalid.push(`${nameOf(uid)} — can't kick the bot`);
+        } else if (!threadInfo.participantIDs.includes(uid)) {
+            invalid.push(`${nameOf(uid)} — not in the group`);
+        } else {
+            validTargets.push(uid);
+        }
     }
 
-    if (targetUID === botID) {
-        return api.sendMessage("❌ You can't kick the bot.", threadID, messageID);
-    }
-
-    if (!threadInfo.participantIDs.includes(targetUID)) {
-        return api.sendMessage("❌ This user is not in the group.", threadID, messageID);
-    }
-
-    const targetName = nameOf(targetUID);
-
-    try {
-        await api.removeUserFromGroup(targetUID, threadID);
+    if (!validTargets.length) {
+        api.setMessageReaction("❎", messageID, threadID, () => {}, true);
         return api.sendMessage(
-            `✅ ${targetName} has been removed from the group.`,
-            threadID, messageID
-        );
-    } catch (err) {
-        return api.sendMessage(
-            `❌ Failed to kick ${targetName}.\n\nError: ${err.message}`,
+            `❌ Couldn't kick anyone:\n${invalid.map(m => `• ${m}`).join("\n")}`,
             threadID, messageID
         );
     }
+
+    const failed = [];
+    for (const uid of validTargets) {
+        try {
+            await api.removeUserFromGroup(uid, threadID);
+        } catch (err) {
+            failed.push(`${nameOf(uid)} — ${err.message}`);
+        }
+    }
+
+    if (!failed.length && !invalid.length) {
+        api.setMessageReaction("✅", messageID, threadID, () => {}, true);
+        return;
+    }
+
+    api.setMessageReaction("❎", messageID, threadID, () => {}, true);
+    const errorLines = [...failed, ...invalid];
+    return api.sendMessage(
+        `⚠️ Some kicks failed:\n${errorLines.map(m => `• ${m}`).join("\n")}`,
+        threadID, messageID
+    );
 };
 
 module.exports.handleReaction = async function ({ api, event, handleReaction }) {
@@ -221,10 +237,10 @@ module.exports.handleReaction = async function ({ api, event, handleReaction }) 
         const threadInfo = await api.getThreadInfo(threadID);
 
         if (!isBotAdmin(threadInfo, botID)) {
-            api.setMessageReaction("❌", handleReaction.userMessageID, threadID, () => {}, true);
-            return api.editMessage(
+            api.setMessageReaction("❎", handleReaction.userMessageID, threadID, () => {}, true);
+            return api.sendMessage(
                 "❌ I'm no longer an admin in this group, so I can't kick anyone.",
-                handleReaction.messageID
+                threadID
             );
         }
 
@@ -242,19 +258,20 @@ module.exports.handleReaction = async function ({ api, event, handleReaction }) 
             }
         }
 
-        let summary = `✅ Kicked ${results.success.length} member(s).\n`;
-        if (results.success.length) {
-            summary += results.success.map(n => `• ${n}`).join("\n") + "\n";
-        }
-        if (results.failed.length) {
-            summary += `\n❌ Failed to kick ${results.failed.length}:\n`;
-            summary += results.failed.map(n => `• ${n}`).join("\n");
+        if (!results.failed.length) {
+            api.setMessageReaction("✅", handleReaction.userMessageID, threadID, () => {}, true);
+            return;
         }
 
-        api.setMessageReaction(results.failed.length ? "⚠️" : "✅", handleReaction.userMessageID, threadID, () => {}, true);
-        return api.editMessage(summary, handleReaction.messageID);
+        api.setMessageReaction("❎", handleReaction.userMessageID, threadID, () => {}, true);
+        return api.sendMessage(
+            `⚠️ Kicked ${results.success.length}, failed ${results.failed.length}:\n` +
+            results.failed.map(n => `• ${n}`).join("\n"),
+            threadID
+        );
     } catch (error) {
-        return api.editMessage(`❌ Error during bulk kick: ${error.message}`, handleReaction.messageID);
+        api.setMessageReaction("❎", handleReaction.userMessageID, threadID, () => {}, true);
+        return api.sendMessage(`❌ Error during bulk kick: ${error.message}`, threadID);
     } finally {
         if (global.client && global.client.handleReaction) {
             const index = global.client.handleReaction.findIndex(e => e.messageID === handleReaction.messageID);

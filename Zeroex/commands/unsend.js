@@ -3,7 +3,7 @@ module.exports.config = {
     aliases: ["u", "uns"],
     version: "3.0.0",
     permission: 0,
-    prefix: false,
+    prefix: true,
     author: "Adi.0X",
     description: "Remove bot messages. Supports reply and reaction trigger.",
     category: "System",
@@ -11,18 +11,11 @@ module.exports.config = {
     cooldowns: 0
 };
 
-// ── Reactions that trigger auto-unsend ─────────────────────────────────────
-// Edit this list to control which emojis will auto-unsend a bot message.
-const UNSEND_REACTIONS = ["👎", "❌", "🗑️","👍", "❤️"];
+const UNSEND_REACTIONS = ["👎", "❎", "🗑️"];
 module.exports.UNSEND_REACTIONS = UNSEND_REACTIONS;
-// ───────────────────────────────────────────────────────────────────────────
 
 const SCOPE = "unsend";
 
-/**
- * Check if a user has permission=1 access:
- * Bot Admin, Group Admin, or mod.
- */
 function hasPermission1(userID, threadID) {
     const id = String(userID);
     const isBotAdmin  = (global.config.ADMINBOT || []).includes(id);
@@ -41,7 +34,6 @@ module.exports.run = async function ({ api, event, args, Settings }) {
     try {
         const perm1 = hasPermission1(senderID, threadID);
 
-        // ── on/off toggle ──────────────────────────────────────────────────
         if (args.length > 0) {
             const modeInput = args[0].toLowerCase();
             if (modeInput === "on" || modeInput === "off") {
@@ -59,7 +51,6 @@ module.exports.run = async function ({ api, event, args, Settings }) {
             }
         }
 
-        // ── must be a reply ────────────────────────────────────────────────
         if (type !== "message_reply") {
             return api.sendMessage(
                 "📌 Reply to a bot message to unsend it.",
@@ -67,7 +58,6 @@ module.exports.run = async function ({ api, event, args, Settings }) {
             );
         }
 
-        // ── target must be bot's own message ──────────────────────────────
         if (messageReply.senderID !== api.getCurrentUserID()) {
             return api.sendMessage(
                 "❌ I can only unsend my own messages.",
@@ -75,7 +65,6 @@ module.exports.run = async function ({ api, event, args, Settings }) {
             );
         }
 
-        // ── permission/mode check ─────────────────────────────────────────
         const mode = await Settings.getValue(SCOPE, threadID, "on");
         if (mode === "off" && !perm1) {
             return api.sendMessage(
@@ -84,7 +73,6 @@ module.exports.run = async function ({ api, event, args, Settings }) {
             );
         }
 
-        // ── do the unsend ─────────────────────────────────────────────────
         return api.unsendMessage(messageReply.messageID, (err) => {
             if (err) {
                 return api.sendMessage(

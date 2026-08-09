@@ -1,0 +1,70 @@
+const axios = require("axios");
+const FormData = require("form-data");
+const fs = require("fs-extra");
+const path = require("path");
+
+module.exports.config = {
+  name: "catbox",
+  version: "1.0.0",
+  permission: 0,
+  prefix: false,
+  author: "Adi.0X",
+  description: "Upload any file to Catbox and get direct URL",
+  category: "Tools",
+  usages: "Send/Reply to a file with catbox",
+  cooldowns: 5
+};
+
+module.exports.run = async function ({ api, event }) {
+  const { messageReply, attachments, threadID, messageID } = event;
+
+  let targetAttachment = null;
+
+  if (attachments && attachments.length > 0) {
+    targetAttachment = attachments[0];
+  } else if (messageReply && messageReply.attachments && messageReply.attachments.length > 0) {
+    targetAttachment = messageReply.attachments[0];
+  }
+
+  if (!targetAttachment) {
+    return api.sendMessage("❌ Please send or reply to a file (Photo, Video, Audio, or File).", threadID, messageID);
+  }
+
+  const cacheDir = path.join(__dirname, "cache");
+  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+
+  const ext = targetAttachment.type === "photo" ? "png" : 
+              targetAttachment.type === "video" ? "mp4" : 
+              targetAttachment.type === "audio" ? "mp3" : "bin";
+
+  const filePath = path.join(cacheDir, `catbox_${Date.now()}.${ext}`);
+
+  try {
+    api.setMessageReaction("☁️", messageID, threadID, () => {}, true);
+
+    const response = await axios.get(targetAttachment.url, { responseType: 'arraybuffer' });
+    fs.writeFileSync(filePath, Buffer.from(response.data));
+
+    const form = new FormData();
+    form.append("reqtype", "fileupload");
+    form.append("fileToUpload", fs.createReadStream(filePath));
+
+    const uploadRes = await axios.post("https://catbox.moe/user/api.php", form, {
+      headers: { ...form.getHeaders() }
+    });
+
+    const fileUrl = uploadRes.data.trim();
+
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    api.setMessageReaction("✅", messageID, threadID, () => {}, true);
+
+    return api.sendMessage(`🔗 URL: ${fileUrl}`, threadID, messageID);
+
+  } catch (err) {
+    console.error(err);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    api.setMessageReaction("❌", messageID, threadID, () => {}, true);
+    return api.sendMessage(`❌ Failed to upload: ${err.message}`, threadID, messageID);
+  }
+};

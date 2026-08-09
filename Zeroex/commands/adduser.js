@@ -3,7 +3,7 @@ const axios = require("axios");
 module.exports.config = {
     name: "adduser",
     aliases: ["add"],
-    version: "1.0.0",
+    version: "1.1.0",
     permission: 2,
     prefix: true,
     author: "Adi.0X",
@@ -38,6 +38,10 @@ async function resolveFacebookId(link) {
         console.error("ZeroEx API Request Failed:", e.message);
     }
     return null;
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 module.exports.run = async function ({ api, event, args }) {
@@ -90,11 +94,36 @@ module.exports.run = async function ({ api, event, args }) {
 
     try {
         await api.addUserToGroup(targetUID, threadID);
-        return api.sendMessage(`✅ ${targetName} has been added to the group.`, threadID, messageID);
     } catch (err) {
+        api.setMessageReaction("❎", messageID, threadID, () => {}, true);
         return api.sendMessage(
-            `❌ Failed to add ${targetName}.\nMake sure the bot is an admin.\n\nError: ${err.message}`,
+            `❌ Failed to add ${targetName}.\n\nError: ${err.message}`,
             threadID, messageID
         );
     }
+    await wait(2500);
+
+    let updatedInfo;
+    try {
+        updatedInfo = await api.getThreadInfo(threadID);
+    } catch (_) {
+        api.setMessageReaction("✅", messageID, threadID, () => {}, true);
+        return;
+    }
+
+    const addedDirectly = updatedInfo.participantIDs.includes(targetUID);
+    const addedAsPending = (updatedInfo.approvalQueue || []).some(
+        a => String(a.requesterID) === targetUID
+    );
+
+    if (addedDirectly || addedAsPending) {
+        api.setMessageReaction("✅", messageID, threadID, () => {}, true);
+        return;
+    }
+
+    api.setMessageReaction("❎", messageID, threadID, () => {}, true);
+    return api.sendMessage(
+        `Couldn't add ${targetName}. Privacy/blocked.`,
+        threadID, messageID
+    );
 };

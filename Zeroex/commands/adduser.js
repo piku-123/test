@@ -40,6 +40,14 @@ async function resolveFacebookId(link) {
     return null;
 }
 
+function isBotAdmin(threadInfo, botID) {
+    const admins = threadInfo.adminIDs || [];
+    return admins.some(a => {
+        const id = typeof a === "string" ? a : (a.id || a.uid);
+        return String(id) === String(botID);
+    });
+}
+
 function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -51,6 +59,8 @@ module.exports.run = async function ({ api, event, args }) {
     if (!threadInfo.isGroup) {
         return api.sendMessage("❌ This command only works in groups.", threadID, messageID);
     }
+
+    const botIsAdmin = isBotAdmin(threadInfo, api.getCurrentUserID());
 
     let targetUID = null;
 
@@ -96,11 +106,14 @@ module.exports.run = async function ({ api, event, args }) {
         await api.addUserToGroup(targetUID, threadID);
     } catch (err) {
         api.setMessageReaction("❎", messageID, threadID, () => {}, true);
-        return api.sendMessage(
-            `❌ Failed to add ${targetName}.\n\nError: ${err.message}`,
-            threadID, messageID
-        );
+        return api.sendMessage(`❌ Couldn't add ${targetName}. Privacy/blocked.`, threadID, messageID);
     }
+
+    if (!botIsAdmin) {
+        api.setMessageReaction("✅", messageID, threadID, () => {}, true);
+        return api.sendMessage(`${targetName} added check pending.`, threadID, messageID);
+    }
+
     await wait(2500);
 
     let updatedInfo;
@@ -111,19 +124,11 @@ module.exports.run = async function ({ api, event, args }) {
         return;
     }
 
-    const addedDirectly = updatedInfo.participantIDs.includes(targetUID);
-    const addedAsPending = (updatedInfo.approvalQueue || []).some(
-        a => String(a.requesterID) === targetUID
-    );
-
-    if (addedDirectly || addedAsPending) {
+    if (updatedInfo.participantIDs.includes(targetUID)) {
         api.setMessageReaction("✅", messageID, threadID, () => {}, true);
         return;
     }
 
     api.setMessageReaction("❎", messageID, threadID, () => {}, true);
-    return api.sendMessage(
-        `Couldn't add ${targetName}. Privacy/blocked.`,
-        threadID, messageID
-    );
+    return api.sendMessage(`❌ Couldn't add ${targetName}. Privacy/blocked.`, threadID, messageID);
 };

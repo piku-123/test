@@ -5,7 +5,7 @@ const path = require("path");
 
 module.exports.config = {
   name: "edit",
-  version: "1.5.0",
+  version: "1.6.0",
   permission: 0,
   prefix: false,
   author: "Adi.0X",
@@ -40,9 +40,14 @@ module.exports.run = async function ({ api, event, args }) {
     api.setMessageReaction("☁️", messageID, threadID, () => {}, true);
     
     const form = new FormData();
-    form.append("file", fs.createReadStream(inputPath));
-    const uploadRes = await axios.post("https://tmpfiles.org/api/v1/upload", form, { headers: { ...form.getHeaders() } });
-    const directDlLink = uploadRes.data.data.url.replace("tmpfiles.org/", "tmpfiles.org/dl/");
+    form.append("reqtype", "fileupload");
+    form.append("fileToUpload", fs.createReadStream(inputPath));
+    
+    const uploadRes = await axios.post("https://catbox.moe/user/api.php", form, { 
+      headers: { ...form.getHeaders() } 
+    });
+
+    const directDlLink = uploadRes.data.trim();
 
     api.setMessageReaction("🪄", messageID, threadID, () => {}, true);
     

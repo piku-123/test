@@ -33,9 +33,22 @@ module.exports.run = async function ({ api, event }) {
   const cacheDir = path.join(__dirname, "cache");
   if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
-  const ext = targetAttachment.type === "photo" ? "png" : 
-              targetAttachment.type === "video" ? "mp4" : 
-              targetAttachment.type === "audio" ? "mp3" : "bin";
+  let ext = "bin";
+  
+  if (targetAttachment.filename) {
+    ext = path.extname(targetAttachment.filename).replace(".", "").toLowerCase() || ext;
+  } else if (targetAttachment.url) {
+    const urlExt = path.extname(targetAttachment.url.split("?")[0]).replace(".", "").toLowerCase();
+    if (urlExt) ext = urlExt;
+  }
+
+  if (ext === "bin") {
+    if (targetAttachment.type === "animated_image") ext = "gif";
+    else if (targetAttachment.type === "photo") ext = "png";
+    else if (targetAttachment.type === "video") ext = "mp4";
+    else if (targetAttachment.type === "audio") ext = "mp3";
+    else if (targetAttachment.type === "file") ext = "pdf"; 
+  }
 
   const filePath = path.join(cacheDir, `catbox_${Date.now()}.${ext}`);
 

@@ -7,7 +7,7 @@ module.exports.config = {
   name: "catbox",
   version: "1.0.0",
   permission: 0,
-  prefix: false,
+  prefix: true,
   author: "Adi.0X",
   description: "Upload any file to Catbox and get direct URL",
   category: "Tools",

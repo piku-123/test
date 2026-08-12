@@ -20,7 +20,6 @@ const MAX_SIZE = 50 * 1024 * 1024; // 50MB — Messenger video size
 
 const urlRegex =
     /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)/gi;
- ──
 const PLATFORM_PATTERNS = [
     /youtube\.com/i,
     /youtu\.be/i,

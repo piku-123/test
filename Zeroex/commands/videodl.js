@@ -16,11 +16,11 @@ module.exports.config = {
 };
 
 const API_BASE = "https://zeroex-all-rest-api.onrender.com/api/vdl?url=";
-const MAX_SIZE = 50 * 1024 * 1024; // 50MB — safe Messenger video attachment size
+const MAX_SIZE = 50 * 1024 * 1024; // 50MB — Messenger video size
 
 const urlRegex =
     /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)/gi;
-
+ ──
 const PLATFORM_PATTERNS = [
     /youtube\.com/i,
     /youtu\.be/i,
@@ -74,30 +74,31 @@ async function resolveUrl(url) {
 
 function collectCandidateUrls(event) {
     const { body, attachments, messageReply } = event;
-    const raw = [];
 
-    if (body) {
-        const found = body.match(urlRegex);
-        if (found) raw.push(...found);
-    }
-
-    const pushAttachmentLinks = atts => {
+    const pushAttachmentLinks = (atts, out) => {
         if (!Array.isArray(atts)) return;
         for (const att of atts) {
-            if (att.url) raw.push(att.url);
-            if (att.facebookUrl) raw.push(att.facebookUrl);
-            if (att.target && att.target.url) raw.push(att.target.url);
+            if (att.url) out.push(att.url);
+            if (att.facebookUrl) out.push(att.facebookUrl);
+            if (att.target && att.target.url) out.push(att.target.url);
         }
     };
-    pushAttachmentLinks(attachments);
 
-    if (messageReply) {
-        if (messageReply.body) {
-            const found = messageReply.body.match(urlRegex);
-            if (found) raw.push(...found);
-        }
-        pushAttachmentLinks(messageReply.attachments);
+    const fromAttachments = [];
+    pushAttachmentLinks(attachments, fromAttachments);
+    if (messageReply) pushAttachmentLinks(messageReply.attachments, fromAttachments);
+
+    const fromText = [];
+    if (body) {
+        const found = body.match(urlRegex);
+        if (found) fromText.push(...found);
     }
+    if (messageReply && messageReply.body) {
+        const found = messageReply.body.match(urlRegex);
+        if (found) fromText.push(...found);
+    }
+
+    const raw = fromAttachments.length ? fromAttachments : fromText;
 
     const seen = new Set();
     const out = [];
@@ -139,8 +140,8 @@ async function pickVideoUrl(video) {
     if (!sd) return hd;
 
     const hdSize = await getRemoteSize(hd);
-    if (hdSize !== null && hdSize > MAX_SIZE) return sd; // HD too big, fall back to SD
-    return hd; // try HD first
+    if (hdSize !== null && hdSize > MAX_SIZE) return sd; 
+    return hd; 
 }
 
 async function handleDownload({ api, threadID, messageID, url, silent }) {
@@ -159,7 +160,7 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
             return api.sendMessage("❌ Failed to fetch this video. Try again later.", threadID, messageID);
         }
 
-        api.setMessageReaction("ℹ️", messageID, threadID, () => {}, true); // fetching/processing info
+        api.setMessageReaction("💢", messageID, threadID, () => {}, true); // fetching/processing info
 
         const { title, video } = res.data;
         const videoUrl = await pickVideoUrl(video);
@@ -181,7 +182,7 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
             writer.on("error", reject);
         });
 
-        api.setMessageReaction("💾", messageID, threadID, () => {}, true); 
+        api.setMessageReaction("💾", messageID, threadID, () => {}, true); // saved, sending now
 
         await new Promise((resolve, reject) => {
             api.sendMessage(
@@ -232,8 +233,8 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 
         return api.sendMessage(
             enable
-                ? "✅ Auto video download is now ON for this group. Anyone can just send a supported link (or share it directly) and I'll download it automatically."
-                : "✅ Auto video download is now OFF. Only permitted users can use #vdl (reply) to download now.",
+                ? "✅ Auto video download is now ON for this group."
+                : "✅ Auto video download is now OFF for this group.",
             threadID, messageID
         );
     }
@@ -276,8 +277,11 @@ module.exports.handleEvent = async function ({ api, event, Threads }) {
     }
     if (!threadDoc || !threadDoc.data || !threadDoc.data.vdlAuto) return; 
 
+    const resolvedSeen = new Set();
     for (const raw of candidates) {
         const resolved = await resolveUrl(raw);
+        if (resolvedSeen.has(resolved)) continue; 
+        resolvedSeen.add(resolved);
         if (!isSupportedLink(resolved)) continue;
         await handleDownload({ api, threadID, messageID, url: resolved, silent: true });
     }

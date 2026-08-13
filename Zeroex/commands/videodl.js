@@ -234,8 +234,8 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 
         return api.sendMessage(
             enable
-                ? "✅ Auto video download is now ON for this group. Anyone can just send a supported link (or share it directly) and I'll download it automatically."
-                : "✅ Auto video download is now OFF. Only permitted users can use #vdl (reply) to download now.",
+                ? "✅ Auto video download is now ON for this group."
+                : "✅ Auto video download is now OFF for this group.",
             threadID, messageID
         );
     }
@@ -268,22 +268,20 @@ module.exports.handleEvent = async function ({ api, event, Threads }) {
     if (senderID == api.getCurrentUserID()) return;
 
     const candidates = collectCandidateUrls(event);
-    if (!candidates.length) return; // nothing link-shaped in this message — skip the DB call entirely
+    if (!candidates.length) return; 
 
-    // Read fresh from the database rather than trusting an in-memory cache,
-    // so this always reflects the real current setting for this group.
     let threadDoc;
     try {
         threadDoc = await Threads.getData(threadID);
     } catch (_) {
         return;
     }
-    if (!threadDoc || !threadDoc.data || !threadDoc.data.vdlAuto) return; // default: off
+    if (!threadDoc || !threadDoc.data || !threadDoc.data.vdlAuto) return; 
 
     const resolvedSeen = new Set();
     for (const raw of candidates) {
         const resolved = await resolveUrl(raw);
-        if (resolvedSeen.has(resolved)) continue; // same video reached via a different-looking link — skip
+        if (resolvedSeen.has(resolved)) continue; 
         resolvedSeen.add(resolved);
         if (!isSupportedLink(resolved)) continue;
         await handleDownload({ api, threadID, messageID, url: resolved, silent: true });

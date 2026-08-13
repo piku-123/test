@@ -16,10 +16,11 @@ module.exports.config = {
 };
 
 const API_BASE = "https://zeroex-all-rest-api.onrender.com/api/vdl?url=";
-const MAX_SIZE = 50 * 1024 * 1024; // 50MB — Messenger video size
+const MAX_SIZE = 50 * 1024 * 1024; 
 
 const urlRegex =
     /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)/gi;
+
 const PLATFORM_PATTERNS = [
     /youtube\.com/i,
     /youtu\.be/i,
@@ -77,6 +78,7 @@ function collectCandidateUrls(event) {
     const pushAttachmentLinks = (atts, out) => {
         if (!Array.isArray(atts)) return;
         for (const att of atts) {
+            if (att.type !== "share") continue;
             if (att.url) out.push(att.url);
             if (att.facebookUrl) out.push(att.facebookUrl);
             if (att.target && att.target.url) out.push(att.target.url);
@@ -113,11 +115,11 @@ function collectCandidateUrls(event) {
 
 function getUserLevel(userID, threadID) {
     const id = String(userID);
-    if ((global.config.ADMINBOT || []).includes(id)) return 4; // bot admin
-    if ((global.config.mod || []).includes(id)) return 3; // mod
+    if ((global.config.ADMINBOT || []).includes(id)) return 4; 
+    if ((global.config.mod || []).includes(id)) return 3; 
     const tInfo = global.data.threadInfo.get(String(threadID)) || {};
     const admins = tInfo.adminIDs || [];
-    if (admins.some(a => String(a.id || a.uid || a) === id)) return 1; // gcadmin
+    if (admins.some(a => String(a.id || a.uid || a) === id)) return 1; 
     return 0;
 }
 
@@ -149,7 +151,7 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
     let filePath = null;
 
     try {
-        api.setMessageReaction("🔎", messageID, threadID, () => {}, true); // detecting/searching
+        api.setMessageReaction("🔎", messageID, threadID, () => {}, true); 
 
         const res = await axios.get(`${API_BASE}${encodeURIComponent(url)}`, { timeout: 30000 });
 
@@ -159,7 +161,7 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
             return api.sendMessage("❌ Failed to fetch this video. Try again later.", threadID, messageID);
         }
 
-        api.setMessageReaction("💢", messageID, threadID, () => {}, true); // fetching/processing info
+        api.setMessageReaction("⏳", messageID, threadID, () => {}, true); 
 
         const { title, video } = res.data;
         const videoUrl = await pickVideoUrl(video);
@@ -181,7 +183,7 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
             writer.on("error", reject);
         });
 
-        api.setMessageReaction("💾", messageID, threadID, () => {}, true); // saved, sending now
+        api.setMessageReaction("💾", messageID, threadID, () => {}, true); 
 
         await new Promise((resolve, reject) => {
             api.sendMessage(
@@ -232,8 +234,8 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 
         return api.sendMessage(
             enable
-                ? "✅ Auto video download is now ON for this group."
-                : "✅ Auto video download is now OFF for this group.",
+                ? "✅ Auto video download is now ON for this group. Anyone can just send a supported link (or share it directly) and I'll download it automatically."
+                : "✅ Auto video download is now OFF. Only permitted users can use #vdl (reply) to download now.",
             threadID, messageID
         );
     }
@@ -266,20 +268,22 @@ module.exports.handleEvent = async function ({ api, event, Threads }) {
     if (senderID == api.getCurrentUserID()) return;
 
     const candidates = collectCandidateUrls(event);
-    if (!candidates.length) return; 
+    if (!candidates.length) return; // nothing link-shaped in this message — skip the DB call entirely
 
+    // Read fresh from the database rather than trusting an in-memory cache,
+    // so this always reflects the real current setting for this group.
     let threadDoc;
     try {
         threadDoc = await Threads.getData(threadID);
     } catch (_) {
         return;
     }
-    if (!threadDoc || !threadDoc.data || !threadDoc.data.vdlAuto) return; 
+    if (!threadDoc || !threadDoc.data || !threadDoc.data.vdlAuto) return; // default: off
 
     const resolvedSeen = new Set();
     for (const raw of candidates) {
         const resolved = await resolveUrl(raw);
-        if (resolvedSeen.has(resolved)) continue; 
+        if (resolvedSeen.has(resolved)) continue; // same video reached via a different-looking link — skip
         resolvedSeen.add(resolved);
         if (!isSupportedLink(resolved)) continue;
         await handleDownload({ api, threadID, messageID, url: resolved, silent: true });

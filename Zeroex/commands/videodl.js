@@ -72,8 +72,9 @@ async function resolveUrl(url) {
     }
 }
 
-function collectCandidateUrls(event) {
-    const { body, attachments, messageReply } = event;
+function extractLinksFromMessageLike(msgLike) {
+    if (!msgLike) return [];
+    const { body, attachments } = msgLike;
 
     const pushAttachmentLinks = (atts, out) => {
         if (!Array.isArray(atts)) return;
@@ -87,15 +88,10 @@ function collectCandidateUrls(event) {
 
     const fromAttachments = [];
     pushAttachmentLinks(attachments, fromAttachments);
-    if (messageReply) pushAttachmentLinks(messageReply.attachments, fromAttachments);
 
     const fromText = [];
     if (body) {
         const found = body.match(urlRegex);
-        if (found) fromText.push(...found);
-    }
-    if (messageReply && messageReply.body) {
-        const found = messageReply.body.match(urlRegex);
         if (found) fromText.push(...found);
     }
 
@@ -172,7 +168,7 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
             return api.sendMessage("❌ No downloadable video found for this link.", threadID, messageID);
         }
 
-        api.setMessageReaction("🎥", messageID, threadID, () => {}, true); // video found
+        api.setMessageReaction("🎥", messageID, threadID, () => {}, true); 
 
         filePath = path.join(cacheDir, `vdl_${Date.now()}.mp4`);
         const videoRes = await axios({
@@ -204,7 +200,7 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
             throw new Error("Downloaded file looks invalid (too small) — likely blocked by the source CDN.");
         }
 
-        api.setMessageReaction("💾", messageID, threadID, () => {}, true); 
+        api.setMessageReaction("💾", messageID, threadID, () => {}, true); // saved, sending now
 
         await new Promise((resolve, reject) => {
             api.sendMessage(
@@ -268,7 +264,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
         );
     }
 
-    const candidates = collectCandidateUrls({ body: "", attachments: [], messageReply });
+    const candidates = extractLinksFromMessageLike(messageReply);
     if (!candidates.length) {
         return api.sendMessage("❌ No link found in the replied message.", threadID, messageID);
     }
@@ -286,10 +282,8 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 
 module.exports.handleEvent = async function ({ api, event, Threads }) {
     const { threadID, messageID } = event;
-
-    const candidates = collectCandidateUrls(event);
+    const candidates = extractLinksFromMessageLike(event);
     if (!candidates.length) return; 
-
     let threadDoc;
     try {
         threadDoc = await Threads.getData(threadID);

@@ -5,7 +5,7 @@ const path = require("path");
 
 module.exports.config = {
   name: "catbox",
-  version: "1.0.0",
+  version: "1.0.1",
   permission: 0,
   prefix: true,
   author: "Adi.0X",
@@ -55,7 +55,11 @@ module.exports.run = async function ({ api, event }) {
   try {
     api.setMessageReaction("☁️", messageID, threadID, () => {}, true);
 
-    const response = await axios.get(targetAttachment.url, { responseType: 'arraybuffer' });
+    const response = await axios.get(targetAttachment.url, { 
+      responseType: 'arraybuffer',
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
     fs.writeFileSync(filePath, Buffer.from(response.data));
 
     const form = new FormData();
@@ -63,7 +67,9 @@ module.exports.run = async function ({ api, event }) {
     form.append("fileToUpload", fs.createReadStream(filePath));
 
     const uploadRes = await axios.post("https://catbox.moe/user/api.php", form, {
-      headers: { ...form.getHeaders() }
+      headers: { ...form.getHeaders() },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity
     });
 
     const fileUrl = uploadRes.data.trim();

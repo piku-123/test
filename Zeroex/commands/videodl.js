@@ -5,7 +5,7 @@ const path = require("path");
 module.exports.config = {
     name: "videodl",
     aliases: ["vdl"],
-    version: "1.1.0",
+    version: "1.1.1",
     permission: 0, 
     prefix: true,
     author: "Adi.0X",
@@ -39,6 +39,12 @@ const PLATFORM_PATTERNS = [
     /pin\.it/i
 ];
 
+const COMMON_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9"
+};
+
 function isSupportedLink(url) {
     return PLATFORM_PATTERNS.some(re => re.test(url));
 }
@@ -60,12 +66,14 @@ async function resolveUrl(url) {
         url.includes("instagram.com") ||
         url.includes("youtu.be") ||
         url.includes("youtube.com") ||
-        url.includes("tiktok.com")
+        url.includes("tiktok.com") ||
+        url.includes("x.com") ||
+        url.includes("twitter.com")
     ) {
         return url.split(" ")[0];
     }
     try {
-        const res = await axios.head(url, { maxRedirects: 10, timeout: 5000 });
+        const res = await axios.head(url, { headers: COMMON_HEADERS, maxRedirects: 10, timeout: 5000 });
         return res.request?.res?.responseUrl || url;
     } catch (_) {
         return url;
@@ -111,17 +119,23 @@ function extractLinksFromMessageLike(msgLike) {
 
 function getUserLevel(userID, threadID) {
     const id = String(userID);
-    if ((global.config.ADMINBOT || []).includes(id)) return 4; // bot admin
-    if ((global.config.mod || []).includes(id)) return 3; // mod
+    if ((global.config.ADMINBOT || []).includes(id)) return 4;
+    if ((global.config.mod || []).includes(id)) return 3;
     const tInfo = global.data.threadInfo.get(String(threadID)) || {};
     const admins = tInfo.adminIDs || [];
-    if (admins.some(a => String(a.id || a.uid || a) === id)) return 1; // gcadmin
+    if (admins.some(a => String(a.id || a.uid || a) === id)) return 1;
     return 0;
 }
 
 async function getRemoteSize(url) {
     try {
-        const res = await axios.head(url, { timeout: 8000 });
+        const res = await axios.head(url, { 
+            timeout: 8000, 
+            headers: {
+                ...COMMON_HEADERS,
+                "Referer": url.includes("twimg.com") ? "https://x.com/" : "https://www.google.com/"
+            }
+        });
         const len = parseInt(res.headers["content-length"], 10);
         return isNaN(len) ? null : len;
     } catch (_) {
@@ -171,20 +185,22 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
         api.setMessageReaction("🎥", messageID, threadID, () => {}, true); 
 
         filePath = path.join(cacheDir, `vdl_${Date.now()}.mp4`);
+        
+        const isTwitter = videoUrl.includes("twimg.com") || url.includes("x.com") || url.includes("twitter.com");
+
         const videoRes = await axios({
             method: "GET",
             url: videoUrl,
             responseType: "stream",
             timeout: 60000,
             headers: {
-                "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                "Referer": "https://www.google.com/"
+                ...COMMON_HEADERS,
+                "Referer": isTwitter ? "https://x.com/" : "https://www.google.com/"
             }
         });
 
         const contentType = String(videoRes.headers["content-type"] || "").toLowerCase();
-        if (contentType && !contentType.startsWith("video/") && !contentType.includes("octet-stream")) {
+        if (contentType && !contentType.startsWith("video/") && !contentType.includes("octet-stream") && !contentType.includes("mp4")) {
             throw new Error(`Source returned non-video content (${contentType || "unknown type"}) — likely blocked by the CDN.`);
         }
 
@@ -196,11 +212,11 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
         });
 
         const stats = fs.statSync(filePath);
-        if (!stats.size || stats.size < 20 * 1024) {
+        if (!stats.size || stats.size < 5 * 1024) { // Twitter/X short videos can be small, reduced to 5KB check
             throw new Error("Downloaded file looks invalid (too small) — likely blocked by the source CDN.");
         }
 
-        api.setMessageReaction("💾", messageID, threadID, () => {}, true); // saved, sending now
+        api.setMessageReaction("💾", messageID, threadID, () => {}, true); 
 
         await new Promise((resolve, reject) => {
             api.sendMessage(

@@ -16,7 +16,7 @@ module.exports.config = {
 };
 
 const API_BASE = "https://zeroex-all-rest-api.onrender.com/api/vdl?url=";
-const MAX_SIZE = 50 * 1024 * 1024; 
+const MAX_SIZE = 100 * 1024 * 1024; 
 
 const urlRegex =
     /(?:https?:\/\/)?(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)/gi;
@@ -115,11 +115,11 @@ function collectCandidateUrls(event) {
 
 function getUserLevel(userID, threadID) {
     const id = String(userID);
-    if ((global.config.ADMINBOT || []).includes(id)) return 4; 
-    if ((global.config.mod || []).includes(id)) return 3; 
+    if ((global.config.ADMINBOT || []).includes(id)) return 4; // bot admin
+    if ((global.config.mod || []).includes(id)) return 3; // mod
     const tInfo = global.data.threadInfo.get(String(threadID)) || {};
     const admins = tInfo.adminIDs || [];
-    if (admins.some(a => String(a.id || a.uid || a) === id)) return 1; 
+    if (admins.some(a => String(a.id || a.uid || a) === id)) return 1; // gcadmin
     return 0;
 }
 
@@ -172,16 +172,37 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
             return api.sendMessage("❌ No downloadable video found for this link.", threadID, messageID);
         }
 
-        api.setMessageReaction("🎥", messageID, threadID, () => {}, true); 
+        api.setMessageReaction("🎥", messageID, threadID, () => {}, true); // video found
 
         filePath = path.join(cacheDir, `vdl_${Date.now()}.mp4`);
-        const videoRes = await axios({ method: "GET", url: videoUrl, responseType: "stream", timeout: 60000 });
+        const videoRes = await axios({
+            method: "GET",
+            url: videoUrl,
+            responseType: "stream",
+            timeout: 60000,
+            headers: {
+                "User-Agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Referer": "https://www.google.com/"
+            }
+        });
+
+        const contentType = String(videoRes.headers["content-type"] || "").toLowerCase();
+        if (contentType && !contentType.startsWith("video/") && !contentType.includes("octet-stream")) {
+            throw new Error(`Source returned non-video content (${contentType || "unknown type"}) — likely blocked by the CDN.`);
+        }
+
         const writer = fs.createWriteStream(filePath);
         videoRes.data.pipe(writer);
         await new Promise((resolve, reject) => {
             writer.on("finish", resolve);
             writer.on("error", reject);
         });
+
+        const stats = fs.statSync(filePath);
+        if (!stats.size || stats.size < 20 * 1024) {
+            throw new Error("Downloaded file looks invalid (too small) — likely blocked by the source CDN.");
+        }
 
         api.setMessageReaction("💾", messageID, threadID, () => {}, true); 
 
@@ -234,8 +255,8 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 
         return api.sendMessage(
             enable
-                ? "✅ Auto video download is now ON for this group."
-                : "✅ Auto video download is now OFF for this group.",
+                ? "✅ Auto video download is now ON for this group. Anyone can just send a supported link (or share it directly) and I'll download it automatically."
+                : "✅ Auto video download is now OFF. Only permitted users can use #vdl (reply) to download now.",
             threadID, messageID
         );
     }
@@ -264,8 +285,7 @@ module.exports.run = async function ({ api, event, args, Threads }) {
 };
 
 module.exports.handleEvent = async function ({ api, event, Threads }) {
-    const { threadID, messageID, senderID } = event;
-    if (senderID == api.getCurrentUserID()) return;
+    const { threadID, messageID } = event;
 
     const candidates = collectCandidateUrls(event);
     if (!candidates.length) return; 

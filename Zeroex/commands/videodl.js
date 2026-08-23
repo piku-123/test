@@ -5,7 +5,7 @@ const path = require("path");
 module.exports.config = {
     name: "videodl",
     aliases: ["vdl"],
-    version: "1.1.1",
+    version: "1.1.2",
     permission: 0, 
     prefix: true,
     author: "Adi.0X",
@@ -16,6 +16,7 @@ module.exports.config = {
 };
 
 const API_BASE = "https://zeroex-all-rest-api.onrender.com/api/vdl?url=";
+const PROXY_BASE = "https://ancient-shadow-466c.sakibbaboxod.workers.dev/?url=";
 const MAX_SIZE = 100 * 1024 * 1024; 
 
 const urlRegex =
@@ -129,7 +130,11 @@ function getUserLevel(userID, threadID) {
 
 async function getRemoteSize(url) {
     try {
-        const res = await axios.head(url, { 
+        const checkUrl = (url.includes("twimg.com") || url.includes("x.com") || url.includes("twitter.com")) 
+            ? `${PROXY_BASE}${encodeURIComponent(url)}` 
+            : url;
+
+        const res = await axios.head(checkUrl, { 
             timeout: 8000, 
             headers: {
                 ...COMMON_HEADERS,
@@ -188,9 +193,11 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
         
         const isTwitter = videoUrl.includes("twimg.com") || url.includes("x.com") || url.includes("twitter.com");
 
+        const finalDownloadUrl = isTwitter ? `${PROXY_BASE}${encodeURIComponent(videoUrl)}` : videoUrl;
+
         const videoRes = await axios({
             method: "GET",
-            url: videoUrl,
+            url: finalDownloadUrl,
             responseType: "stream",
             timeout: 60000,
             headers: {
@@ -212,7 +219,7 @@ async function handleDownload({ api, threadID, messageID, url, silent }) {
         });
 
         const stats = fs.statSync(filePath);
-        if (!stats.size || stats.size < 5 * 1024) { // Twitter/X short videos can be small, reduced to 5KB check
+        if (!stats.size || stats.size < 5 * 1024) { 
             throw new Error("Downloaded file looks invalid (too small) — likely blocked by the source CDN.");
         }
 

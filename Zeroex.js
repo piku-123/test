@@ -283,7 +283,10 @@ function onBot({ models: botModel }) {
                         imageSrc: t.imageSrc || null
                     }));
                 axios.post(`${DASHBOARD_BASE}/api/groups-update`, { groups }).catch(() => {});
-            } catch (e) { /* ignore */ }
+            } catch (e) {
+                const realError = (e && typeof e === 'object') ? JSON.stringify(e, null, 2) : String(e);
+                console.error('[ pushGroups ] getThreadList real error:', realError);
+            }
         };
         setTimeout(pushGroups, 5000);
         setInterval(pushGroups, 60000);

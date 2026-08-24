@@ -2,7 +2,7 @@ module.exports.config = {
     name: "out",
     aliases: ["leave"],
     version: "1.0.0",
-    permission: 1,
+    permission: 2,
     prefix: true,
     author: "Adi.0X",
     description: "Bot leaves the current group.",

@@ -269,6 +269,16 @@ function onBot({ models: botModel }) {
         sendHeartbeat();
         setInterval(sendHeartbeat, 5000);
 
+        // Base delay between group syncs, and the ceiling backoff can grow to.
+        const PUSH_GROUPS_BASE_DELAY = 5 * 60 * 1000;   // 5 minutes
+        const PUSH_GROUPS_MAX_DELAY = 30 * 60 * 1000;   // 30 minutes
+        let pushGroupsDelay = PUSH_GROUPS_BASE_DELAY;
+
+        const isRateLimitError = (e) => {
+            const msg = (e && (e.message || e.error || '')).toString().toLowerCase();
+            return e?.code === 1675004 || msg.includes('rate limit');
+        };
+
         const pushGroups = async () => {
             try {
                 const list = await api.getThreadList(100, null, ['INBOX']);
@@ -283,13 +293,23 @@ function onBot({ models: botModel }) {
                         imageSrc: t.imageSrc || null
                     }));
                 axios.post(`${DASHBOARD_BASE}/api/groups-update`, { groups }).catch(() => {});
+
+                // Success: ease back down toward the base delay.
+                pushGroupsDelay = Math.max(PUSH_GROUPS_BASE_DELAY, Math.floor(pushGroupsDelay / 2));
             } catch (e) {
                 const realError = (e && typeof e === 'object') ? JSON.stringify(e, null, 2) : String(e);
                 console.error('[ pushGroups ] getThreadList real error:', realError);
+
+                if (isRateLimitError(e)) {
+                    // Rate-limited: back off exponentially, capped at PUSH_GROUPS_MAX_DELAY.
+                    pushGroupsDelay = Math.min(PUSH_GROUPS_MAX_DELAY, pushGroupsDelay * 2);
+                    console.error(`[ pushGroups ] Rate limited — backing off, next attempt in ${Math.round(pushGroupsDelay / 60000)} min`);
+                }
+            } finally {
+                setTimeout(pushGroups, pushGroupsDelay);
             }
         };
         setTimeout(pushGroups, 5000);
-        setInterval(pushGroups, 60000);
 
         setInterval(async () => {
             try {

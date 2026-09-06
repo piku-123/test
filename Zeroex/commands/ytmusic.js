@@ -3,10 +3,20 @@ const path = require("path");
 const axios = require("axios");
 
 async function downloadMusic(videoID, filePath) {
-  const apiUrl = `https://zeroex-tools.onrender.com/api/yt-mp3?url=https://www.youtube.com/watch?v=${videoID}`;
+  // ১. নতুন API থেকে ডাউনলোড লিংক নেওয়া
+  const apiUrl = `https://zeroex-tools.onrender.com/api/yt/down?url=https://www.youtube.com/watch?v=${videoID}&format=mp3`;
+  const res = await axios.get(apiUrl);
+
+  if (!res.data || !res.data.status || !res.data.result || !res.data.result.downloadUrl) {
+    throw new Error("Failed to get download URL from API");
+  }
+
+  const downloadUrl = res.data.result.downloadUrl;
+
+  // ২. প্রাপ্ত downloadUrl থেকে অডিও ফাইল ডাউনলোড করা
   const response = await axios({
     method: "get",
-    url: apiUrl,
+    url: downloadUrl,
     responseType: "stream"
   });
 

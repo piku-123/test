@@ -2,7 +2,13 @@ const fs = require("fs-extra");
 const path = require("path");
 const axios = require("axios");
 
-async function downloadMusic(videoID, filePath) {
+function extractVideoID(url) {
+  const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/;
+  const match = url.match(regex);
+  return match ? match[1] : null;
+}
+
+async function downloadMusic(videoID) {
   const apiUrl = `https://zeroex-tools.onrender.com/api/yt/down?url=https://www.youtube.com/watch?v=${videoID}&format=mp3`;
   const res = await axios.get(apiUrl);
 
@@ -10,8 +16,13 @@ async function downloadMusic(videoID, filePath) {
     throw new Error("Failed to get download URL from API");
   }
 
-  const downloadUrl = res.data.result.downloadUrl;
+  return {
+    downloadUrl: res.data.result.downloadUrl,
+    title: res.data.result.title || "Audio Track"
+  };
+}
 
+async function fetchAndSaveFile(downloadUrl, filePath) {
   const response = await axios({
     method: "get",
     url: downloadUrl,
@@ -30,20 +41,25 @@ async function downloadMusic(videoID, filePath) {
 module.exports.config = {
   name: "play",
   aliases: ["p", "song"],
-  version: "3.1.0",
+  version: "3.2.0",
   permission: 0,
   prefix: false,
   author: "Adi.0X",
   description: "Instant YT Music Play",
   category: "Media",
-  usages: "[song name]",
+  usages: "[song name or youtube url]",
   cooldowns: 2
 };
 
 module.exports.run = async function ({ api, event, args }) {
-  const { threadID, messageID } = event;
-  const query = args.join(" ").trim();
-  if (!query) return api.sendMessage("Please provide a song name.", threadID, messageID);
+  const { threadID, messageID, body } = event;
+
+  const urlRegex = /(https?:\/\/(?:www\.|music\.)?youtu(?:be\.com\/[^\s]+|\.be\/[^\s]+))/i;
+  const linkMatch = body ? body.match(urlRegex) : null;
+
+  const query = linkMatch ? linkMatch[0] : args.join(" ").trim();
+
+  if (!query) return api.sendMessage("Please provide a song name or YouTube link.", threadID, messageID);
 
   const cacheDir = path.join(__dirname, "cache");
   if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
@@ -53,23 +69,46 @@ module.exports.run = async function ({ api, event, args }) {
   try {
     api.setMessageReaction("🔍", messageID, threadID, () => {}, true);
 
-    const searchRes = await axios.get(`https://zeroex-all-rest-api.onrender.com/api/ytmusic/search?q=${encodeURIComponent(query)}&limit=1`);
-    const results = searchRes.data.results;
+    const directVideoID = extractVideoID(query);
+    let videoID = directVideoID;
+    let title = "";
+    let artist = "";
+    let album = "";
 
-    if (!results || results.length === 0) {
-      api.setMessageReaction("❌", messageID, threadID, () => {}, true);
-      return api.sendMessage("❌ No songs found.", threadID, messageID);
+    if (!directVideoID) {
+      const searchRes = await axios.get(`https://zeroex-all-rest-api.onrender.com/api/ytmusic/search?q=${encodeURIComponent(query)}&limit=1`);
+      const results = searchRes.data.results;
+
+      if (!results || results.length === 0) {
+        api.setMessageReaction("❌", messageID, threadID, () => {}, true);
+        return api.sendMessage("❌ No songs found.", threadID, messageID);
+      }
+
+      const selected = results[0];
+      videoID = selected.videoId;
+      title = selected.title || "Audio Track";
+      artist = selected.artist || "Unknown";
+      album = selected.album || "Single";
     }
 
-    const selected = results[0];
-
     api.setMessageReaction("💭", messageID, threadID, () => {}, true);
-    await downloadMusic(selected.videoId, filePath);
+    
+    const downloadData = await downloadMusic(videoID);
+    
+    if (directVideoID) {
+      title = downloadData.title;
+    }
+
+    await fetchAndSaveFile(downloadData.downloadUrl, filePath);
 
     api.setMessageReaction("⏩", messageID, threadID, () => {}, true);
 
+    const messageBody = directVideoID 
+      ? `🎵 Title: ${title}`
+      : `🎵 Title: ${title}\n👤 Artist: ${artist}\n💿 Album: ${album}`;
+
     await api.sendMessage({
-      body: `🎵 Title: ${selected.title}\n👤 Artist: ${selected.artist || "Unknown"}\n💿 Album: ${selected.album || "Single"}`,
+      body: messageBody,
       attachment: fs.createReadStream(filePath)
     }, threadID, (err) => {
       api.setMessageReaction("🎧", messageID, threadID, () => {}, true);

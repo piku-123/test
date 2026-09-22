@@ -4,13 +4,13 @@ const path = require("path");
 module.exports.config = {
     name: "resend",
     aliases: ["rs"],
-    version: "3.0.0",
+    version: "3.1.0",
     permission: 1,
     prefix: true,
     author: "Adi.0X",
     description: "Logs unsent messages/attachments and resends them to the group.",
     category: "Group Tools",
-    usages: "[on/off/status]",
+    usages: "[on/off]",
     cooldowns: 3
 };
 
@@ -32,7 +32,7 @@ module.exports.handleEvent = async function ({ event, api, Users, Threads }) {
             msgBody: body || "",
             attachment: attachments || []
         });
-        // memory limit: 500 message এর বেশি হলে পুরনো মুছে দাও
+        // memory limit: 5000 message এর বেশি হলে পুরনো মুছে দাও
         if (global.logMessage.size > 5000) {
             const firstKey = global.logMessage.keys().next().value;
             global.logMessage.delete(firstKey);
@@ -174,17 +174,15 @@ Attachments : ${logAttachments.length}${unsentMsg.msgBody ? `\nMessage: ${unsent
             attachment: logAttachments
         }, logGroupID, () => cleanCache());
     } else {
-        // log group না থাকলে / attachment না গেলেও cache মুছে দাও
         setTimeout(cleanCache, 5000);
     }
 };
 
 // ─────────────────────────────────────────────
-//  RUN — on/off/status
+//  RUN — React Only (No text response)
 // ─────────────────────────────────────────────
 module.exports.run = async function ({ api, event, args, Threads }) {
     const { threadID, messageID, senderID } = event;
-
     const sub = (args[0] || "").toLowerCase();
 
     // ── Permission check (group admin / mod / bot admin) ──
@@ -196,46 +194,38 @@ module.exports.run = async function ({ api, event, args, Threads }) {
     const isGroupAdmin = groupAdmins.some(a => String(a.id || a.uid) === sid);
     const hasPerm      = isBotAdmin || isMod || isGroupAdmin;
 
-    // ── STATUS (default) ──
+    // ── STATUS CHECK: শুধু "resend" বা "resend status" দিলে ──
     if (!sub || sub === "status") {
-        const threadData = await Threads.getData(threadID);
-        const isOn = !!(threadData?.data?.resend);
-        const logGrp = global.config.UNSEND_LOG_GROUP || "(not set)";
-        return api.sendMessage(
-`┏ RESEND STATUS
-┃ This Group  : ${isOn ? "ON" : "OFF"}
-┃ Log Group   : ${logGrp}
-┗━━━━━━━━━━━━━━━━━━━━
-┏ USAGE
-┃ resend on    — enable resend
-┃ resend off   — disable resend
-┗━━━━━━━━━━━━━━━━━━━━`, threadID, messageID);
+        try {
+            const threadData = await Threads.getData(threadID);
+            const isOn = !!(threadData?.data?.resend);
+            return api.setMessageReaction(isOn ? "🟢" : "🔴", messageID, threadID, () => {}, true);
+        } catch {
+            return api.setMessageReaction("🔴", messageID, threadID, () => {}, true);
+        }
     }
 
+    // ── Permission না থাকলে কিছু করবে না / error react ──
     if (!hasPerm) {
-        return api.sendMessage(
-`PERMISSION DENIED
-Only Group Admins, Mods or Bot Admins can change resend settings.`, threadID, messageID);
+        return api.setMessageReaction("❎", messageID, threadID, () => {}, true);
     }
 
+    // ── ON / OFF TOGGLE ──
     if (sub === "on" || sub === "off") {
         const enable = sub === "on";
         try {
             await Threads.setData(threadID, { "data.resend": enable });
+            
             // in-memory cache update
             const cached = global.data.threadData.get(String(threadID)) || {};
             cached.resend = enable;
             global.data.threadData.set(String(threadID), cached);
 
-            api.setMessageReaction("✅", messageID, threadID, () => {}, true);
-            return api.sendMessage(
-` RESEND ${enable ? "ENABLED ✅" : "DISABLED ❎"}
-Unsent messages will ${enable ? "be resent in the group" : "not be resent anymore"}`, threadID, messageID);
+            return api.setMessageReaction("✅", messageID, threadID, () => {}, true);
         } catch (e) {
-            api.setMessageReaction("❌", messageID, threadID, () => {}, true);
-            return api.sendMessage(`❌ Error:\n${e.message}`, threadID, messageID);
+            return api.setMessageReaction("❎", messageID, threadID, () => {}, true);
         }
     }
 
-    return api.sendMessage("❌ Valid option: on / off / status", threadID, messageID);
+    return api.setMessageReaction("❎", messageID, threadID, () => {}, true);
 };

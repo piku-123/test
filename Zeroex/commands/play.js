@@ -8,7 +8,7 @@ function extractVideoID(url) {
   return match ? match[1] : null;
 }
 
-async function downloadMusic(videoID) {
+async function downloadMusic(videoID, filePath) {
   const apiUrl = `https://zeroex-tools.onrender.com/api/yt/down?url=https://www.youtube.com/watch?v=${videoID}&format=mp3`;
   const res = await axios.get(apiUrl);
 
@@ -41,7 +41,7 @@ async function fetchAndSaveFile(downloadUrl, filePath) {
 module.exports.config = {
   name: "play",
   aliases: ["p", "song"],
-  version: "3.2.0",
+  version: "3.3.0",
   permission: 0,
   prefix: false,
   author: "Adi.0X",
@@ -52,13 +52,8 @@ module.exports.config = {
 };
 
 module.exports.run = async function ({ api, event, args }) {
-  const { threadID, messageID, body } = event;
-
-  const urlRegex = /(https?:\/\/(?:www\.|music\.)?youtu(?:be\.com\/[^\s]+|\.be\/[^\s]+))/i;
-  const linkMatch = body ? body.match(urlRegex) : null;
-
-  const query = linkMatch ? linkMatch[0] : args.join(" ").trim();
-
+  const { threadID, messageID } = event;
+  const query = args.join(" ").trim();
   if (!query) return api.sendMessage("Please provide a song name or YouTube link.", threadID, messageID);
 
   const cacheDir = path.join(__dirname, "cache");
@@ -93,7 +88,7 @@ module.exports.run = async function ({ api, event, args }) {
 
     api.setMessageReaction("💭", messageID, threadID, () => {}, true);
     
-    const downloadData = await downloadMusic(videoID);
+    const downloadData = await downloadMusic(videoID, filePath);
     
     if (directVideoID) {
       title = downloadData.title;
